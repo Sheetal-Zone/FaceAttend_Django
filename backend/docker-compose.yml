@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # FastAPI Backend
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=mysql+pymysql://face_attendance_user:your_password@mysql:3306/face_attendance
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your-super-secret-key-here-make-it-long-and-random
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+      - DEBUG=False
+    depends_on:
+      - mysql
+      - redis
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+    networks:
+      - face-attendance-network
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=your_root_password
+      - MYSQL_DATABASE=face_attendance
+      - MYSQL_USER=face_attendance_user
+      - MYSQL_PASSWORD=your_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    networks:
+      - face-attendance-network
+    command: --default-authentication-plugin=mysql_native_password
+
+  # Redis for caching and background tasks
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - face-attendance-network
+
+  # Celery Worker for background tasks (optional)
+  celery_worker:
+    build: .
+    command: celery -A app.celery_app worker --loglevel=info
+    environment:
+      - DATABASE_URL=mysql+pymysql://face_attendance_user:your_password@mysql:3306/face_attendance
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - mysql
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - face-attendance-network
+
+  # Celery Beat for scheduled tasks (optional)
+  celery_beat:
+    build: .
+    command: celery -A app.celery_app beat --loglevel=info
+    environment:
+      - DATABASE_URL=mysql+pymysql://face_attendance_user:your_password@mysql:3306/face_attendance
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - mysql
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - face-attendance-network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  face-attendance-network:
+    driver: bridge

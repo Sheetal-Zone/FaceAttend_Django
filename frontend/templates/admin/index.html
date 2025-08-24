@@ -1,0 +1,539 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+    .welcome-section {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        padding: 3rem 2rem;
+        border-radius: 16px;
+        margin-bottom: 2rem;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .welcome-section::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+        pointer-events: none;
+    }
+
+    .welcome-section h1 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin: 0 0 1rem 0;
+        position: relative;
+        z-index: 1;
+    }
+
+    .welcome-section p {
+        font-size: 1.2rem;
+        margin: 0;
+        opacity: 0.9;
+        position: relative;
+        z-index: 1;
+    }
+
+    .quick-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 3rem;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-color);
+        text-align: center;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    }
+
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    }
+
+    .stat-card h3 {
+        margin: 0 0 0.5rem 0;
+        color: var(--text-primary);
+        font-size: 2.5rem;
+        font-weight: 700;
+    }
+
+    .stat-card p {
+        margin: 0;
+        color: var(--text-secondary);
+        font-weight: 600;
+        font-size: 1.1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.8;
+    }
+
+    .quick-actions {
+        background: white;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-color);
+    }
+
+    .quick-actions h2 {
+        color: var(--text-primary);
+        margin-bottom: 1.5rem;
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
+    .action-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    .action-btn {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        text-decoration: none;
+        text-align: center;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        box-shadow: var(--shadow-md);
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .action-btn:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-lg);
+        color: white;
+        text-decoration: none;
+    }
+
+    .action-btn i {
+        font-size: 2rem;
+    }
+
+    .app-list {
+        background: white;
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-color);
+    }
+
+    .app-list h2 {
+        color: var(--text-primary);
+        margin-bottom: 1.5rem;
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
+    .app-list .model-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .app-list .model-list li {
+        border-bottom: 1px solid var(--border-color);
+        padding: 0;
+    }
+
+    .app-list .model-list li:last-child {
+        border-bottom: none;
+    }
+
+    .app-list .model-list a {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.25rem;
+        color: var(--text-primary);
+        text-decoration: none;
+        transition: all 0.3s ease;
+        border-radius: 8px;
+        margin: 0.25rem 0;
+    }
+
+    .app-list .model-list a:hover {
+        background: linear-gradient(90deg, rgba(79, 70, 229, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
+        color: var(--primary-color);
+        transform: translateX(5px);
+    }
+
+    .model-count {
+        background: var(--primary-color);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .camera-controls {
+        background: white;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-color);
+    }
+
+    .camera-controls h3 {
+        color: var(--text-primary);
+        margin-bottom: 1.5rem;
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
+    .camera-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .camera-option {
+        background: var(--light-color);
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.5rem;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        text-align: center;
+    }
+
+    .camera-option:hover {
+        border-color: var(--primary-color);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .camera-option.selected {
+        border-color: var(--primary-color);
+        background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
+    }
+
+    .camera-option h4 {
+        margin: 0 0 0.5rem 0;
+        color: var(--text-primary);
+        font-weight: 600;
+    }
+
+    .camera-option p {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+
+    .camera-option i {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        color: var(--primary-color);
+    }
+
+    .webcam-preview {
+        background: var(--dark-color);
+        border-radius: 12px;
+        padding: 1rem;
+        margin-top: 1rem;
+        text-align: center;
+        display: none;
+    }
+
+    .webcam-preview.active {
+        display: block;
+    }
+
+    .webcam-preview video {
+        max-width: 100%;
+        border-radius: 8px;
+        box-shadow: var(--shadow-md);
+    }
+
+    .webcam-controls {
+        margin-top: 1rem;
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .webcam-btn {
+        background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .webcam-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .webcam-btn.stop {
+        background: linear-gradient(135deg, var(--danger-color) 0%, #dc2626 100%);
+    }
+
+    @media (max-width: 768px) {
+        .welcome-section {
+            padding: 2rem 1rem;
+        }
+
+        .welcome-section h1 {
+            font-size: 2rem;
+        }
+
+        .quick-stats {
+            grid-template-columns: 1fr;
+        }
+
+        .action-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .camera-options {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block coltype %}colMS{% endblock %}
+
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<div class="welcome-section">
+    <h1>🎓 Welcome to Face Attendance Administration</h1>
+    <p>Manage students, monitor attendance, and control face recognition systems</p>
+</div>
+
+<div class="quick-stats">
+    <div class="stat-card">
+        <div class="stat-icon">👥</div>
+        <h3>{{ app_list.0.models.0.count|default:"0" }}</h3>
+        <p>Total Students</p>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">📊</div>
+        <h3>{{ app_list.0.models.1.count|default:"0" }}</h3>
+        <p>Attendance Records</p>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">📹</div>
+        <h3>{{ app_list.0.models.2.count|default:"0" }}</h3>
+        <p>Camera Streams</p>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">📈</div>
+        <h3>{{ app_list.0.models.3.count|default:"0" }}</h3>
+        <p>Detection Logs</p>
+    </div>
+</div>
+
+<div class="quick-actions">
+    <h2>🚀 Quick Actions</h2>
+    <div class="action-grid">
+        {% if perms.attendance.add_student %}
+        <a href="{% url 'admin:attendance_student_add' %}" class="action-btn">
+            <i>👤</i>
+            <span>Add New Student</span>
+        </a>
+        {% endif %}
+        
+        {% if perms.attendance.add_camerastream %}
+        <a href="{% url 'admin:attendance_camerastream_add' %}" class="action-btn">
+            <i>📹</i>
+            <span>Add Camera Stream</span>
+        </a>
+        {% endif %}
+        
+        <a href="{% url 'attendance:dashboard' %}" class="action-btn">
+            <i>📊</i>
+            <span>View Dashboard</span>
+        </a>
+        
+        <a href="{% url 'attendance:live_detection' %}" class="action-btn">
+            <i>🎯</i>
+            <span>Live Detection</span>
+        </a>
+    </div>
+</div>
+
+<div class="camera-controls">
+    <h3>📹 Camera Controls</h3>
+    <div class="camera-options">
+        <div class="camera-option" onclick="selectCamera('webcam')">
+            <i>💻</i>
+            <h4>Laptop Webcam</h4>
+            <p>Use your laptop's built-in camera for attendance</p>
+        </div>
+        <div class="camera-option" onclick="selectCamera('cctv')">
+            <i>📺</i>
+            <h4>CCTV Camera</h4>
+            <p>Use external CCTV or IP camera streams</p>
+        </div>
+    </div>
+    
+    <div class="webcam-preview" id="webcamPreview">
+        <video id="webcamVideo" autoplay muted></video>
+        <div class="webcam-controls">
+            <button class="webcam-btn" onclick="startWebcam()">Start Webcam</button>
+            <button class="webcam-btn stop" onclick="stopWebcam()" style="display: none;">Stop Webcam</button>
+        </div>
+    </div>
+</div>
+
+<div class="app-list">
+    <h2>📋 Application Modules</h2>
+    {% for app in app_list %}
+    <div class="app">
+        <div class="app-list">
+            <ul class="model-list">
+                {% for model in app.models %}
+                <li>
+                    <a href="{{ model.admin_url }}">
+                        <span>{{ model.name }}</span>
+                        <span class="model-count">{{ model.count }}</span>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+let selectedCamera = null;
+let webcamStream = null;
+
+function selectCamera(type) {
+    // Remove selected class from all options
+    document.querySelectorAll('.camera-option').forEach(option => {
+        option.classList.remove('selected');
+    });
+    
+    // Add selected class to clicked option
+    event.currentTarget.classList.add('selected');
+    selectedCamera = type;
+    
+    if (type === 'webcam') {
+        document.getElementById('webcamPreview').classList.add('active');
+    } else {
+        document.getElementById('webcamPreview').classList.remove('active');
+        stopWebcam();
+    }
+}
+
+async function startWebcam() {
+    try {
+        const video = document.getElementById('webcamVideo');
+        const startBtn = document.querySelector('.webcam-btn');
+        const stopBtn = document.querySelector('.webcam-btn.stop');
+        
+        webcamStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            } 
+        });
+        
+        video.srcObject = webcamStream;
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-block';
+        
+        // Show success message
+        showMessage('Webcam started successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error accessing webcam:', error);
+        showMessage('Error accessing webcam. Please check permissions.', 'error');
+    }
+}
+
+function stopWebcam() {
+    if (webcamStream) {
+        webcamStream.getTracks().forEach(track => track.stop());
+        webcamStream = null;
+        
+        const video = document.getElementById('webcamVideo');
+        video.srcObject = null;
+        
+        const startBtn = document.querySelector('.webcam-btn');
+        const stopBtn = document.querySelector('.webcam-btn.stop');
+        startBtn.style.display = 'inline-block';
+        stopBtn.style.display = 'none';
+        
+        showMessage('Webcam stopped.', 'warning');
+    }
+}
+
+function showMessage(message, type) {
+    // Create message element
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `messagelist ${type}`;
+    messageDiv.innerHTML = `<li>${message}</li>`;
+    
+    // Insert at the top of the content
+    const content = document.querySelector('#content');
+    content.insertBefore(messageDiv, content.firstChild);
+    
+    // Remove message after 5 seconds
+    setTimeout(() => {
+        messageDiv.remove();
+    }, 5000);
+}
+
+// Auto-select webcam option on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const webcamOption = document.querySelector('.camera-option');
+    if (webcamOption) {
+        webcamOption.classList.add('selected');
+        selectedCamera = 'webcam';
+    }
+});
+</script>
+{% endblock %}

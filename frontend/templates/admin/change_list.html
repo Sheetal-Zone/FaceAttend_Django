@@ -1,0 +1,419 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_list %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .module {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        margin-bottom: 2rem;
+        overflow: hidden;
+    }
+
+    .module h2 {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        padding: 1.5rem;
+        margin: 0;
+        font-size: 1.3rem;
+        font-weight: 600;
+    }
+
+    .results {
+        background: white;
+        border-radius: 0 0 15px 15px;
+        overflow: hidden;
+    }
+
+    .results table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .results th {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        padding: 1rem;
+        font-weight: 600;
+        text-align: left;
+        border: none;
+    }
+
+    .results td {
+        padding: 1rem;
+        border-bottom: 1px solid #e9ecef;
+        vertical-align: middle;
+    }
+
+    .results tr:hover {
+        background-color: #f8f9fa;
+        transition: background-color 0.3s ease;
+    }
+
+    .results tr:last-child td {
+        border-bottom: none;
+    }
+
+    .field-get_absolute_url a {
+        color: var(--primary-color);
+        text-decoration: none;
+        font-weight: 600;
+        transition: color 0.3s ease;
+    }
+
+    .field-get_absolute_url a:hover {
+        color: var(--secondary-color);
+        text-decoration: underline;
+    }
+
+    .object-tools {
+        margin-bottom: 2rem;
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .object-tools a {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .object-tools a:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        color: white;
+    }
+
+    .object-tools .addlink {
+        background: linear-gradient(135deg, var(--success-color) 0%, #20c997 100%);
+    }
+
+    .object-tools .addlink:hover {
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+
+    .actions {
+        background: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        margin-bottom: 2rem;
+    }
+
+    .actions h2 {
+        color: var(--primary-color);
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin: 0 0 1rem 0;
+    }
+
+    .actions select {
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 0.5rem;
+        margin-right: 1rem;
+        transition: border-color 0.3s ease;
+    }
+
+    .actions select:focus {
+        border-color: var(--primary-color);
+        outline: none;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+
+    .actions input[type="submit"] {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .actions input[type="submit"]:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .paginator {
+        background: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        text-align: center;
+        margin-top: 2rem;
+    }
+
+    .paginator a, .paginator .this-page {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        margin: 0 0.25rem;
+        border-radius: 6px;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        font-weight: 600;
+    }
+
+    .paginator a {
+        background: white;
+        color: var(--primary-color);
+        border: 2px solid var(--primary-color);
+    }
+
+    .paginator a:hover {
+        background: var(--primary-color);
+        color: white;
+        transform: translateY(-1px);
+    }
+
+    .paginator .this-page {
+        background: var(--primary-color);
+        color: white;
+        border: 2px solid var(--primary-color);
+    }
+
+    .paginator .showall {
+        background: linear-gradient(135deg, var(--success-color) 0%, #20c997 100%);
+        color: white;
+        border: none;
+    }
+
+    .paginator .showall:hover {
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+
+    .search-form {
+        background: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        margin-bottom: 2rem;
+    }
+
+    .search-form h2 {
+        color: var(--primary-color);
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin: 0 0 1rem 0;
+    }
+
+    .search-form input[type="text"] {
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 0.75rem;
+        width: 300px;
+        font-size: 1rem;
+        transition: border-color 0.3s ease;
+    }
+
+    .search-form input[type="text"]:focus {
+        border-color: var(--primary-color);
+        outline: none;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+
+    .search-form input[type="submit"] {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-left: 1rem;
+    }
+
+    .search-form input[type="submit"]:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .date-hierarchy {
+        background: white;
+        border-radius: 15px;
+        padding: 1rem 1.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        margin-bottom: 2rem;
+    }
+
+    .date-hierarchy a {
+        color: var(--primary-color);
+        text-decoration: none;
+        font-weight: 600;
+        margin-right: 1rem;
+        transition: color 0.3s ease;
+    }
+
+    .date-hierarchy a:hover {
+        color: var(--secondary-color);
+    }
+
+    .date-hierarchy .this-month {
+        color: var(--secondary-color);
+        font-weight: 700;
+    }
+
+    /* Checkbox styling */
+    .action-checkbox {
+        transform: scale(1.2);
+        margin: 0;
+    }
+
+    /* Status indicators */
+    .field-status {
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .status-active {
+        background: linear-gradient(135deg, var(--success-color) 0%, #20c997 100%);
+        color: white;
+    }
+
+    .status-inactive {
+        background: linear-gradient(135deg, var(--danger-color) 0%, #c82333 100%);
+        color: white;
+    }
+
+    .status-pending {
+        background: linear-gradient(135deg, var(--warning-color) 0%, #e0a800 100%);
+        color: #212529;
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .object-tools {
+            flex-direction: column;
+        }
+        
+        .object-tools a {
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .search-form input[type="text"] {
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+        
+        .search-form input[type="submit"] {
+            width: 100%;
+            margin-left: 0;
+        }
+        
+        .results {
+            overflow-x: auto;
+        }
+        
+        .results table {
+            min-width: 600px;
+        }
+    }
+
+    /* Empty state */
+    .empty-list {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+    }
+
+    .empty-list h3 {
+        color: var(--primary-color);
+        margin-bottom: 1rem;
+    }
+
+    .empty-list p {
+        margin-bottom: 2rem;
+    }
+
+    .empty-list .addlink {
+        background: linear-gradient(135deg, var(--success-color) 0%, #20c997 100%);
+        color: white;
+        padding: 1rem 2rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        display: inline-block;
+    }
+
+    .empty-list .addlink:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-list{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+    &rsaquo; {{ opts.verbose_name_plural|capfirst }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    {% block object-tools %}
+        {% if has_add_permission %}
+            <div class="object-tools">
+                {% block object-tools-items %}
+                    {% url cl.opts|admin_urlname:'add' as add_url %}
+                    <a href="{% add_preserved_filters add_url is_popup to_field %}" class="addlink">
+                        <i class="admin-icon">➕</i>
+                        {% blocktrans with cl.opts.verbose_name as name %}Add {{ name }}{% endblocktrans %}
+                    </a>
+                {% endblock %}
+            </div>
+        {% endif %}
+    {% endblock %}
+
+    {% if cl.formset and cl.formset.errors %}
+        <p class="errornote">
+            {% blocktrans count counter=cl.formset.errors|length %}Please correct the error below.{% plural %}Please correct the errors below.{% endblocktrans %}
+        </p>
+        {{ cl.formset.non_form_errors }}
+    {% endif %}
+
+    <div class="module{% if cl.has_filters %} filtered{% endif %}" id="changelist">
+        {% block search %}{% search_form cl %}{% endblock %}
+        {% block date_hierarchy %}{% if cl.date_hierarchy %}{% date_hierarchy cl %}{% endif %}{% endblock %}
+
+        {% block filters %}
+            {% if cl.has_filters %}
+                <div id="changelist-filter">
+                    <h2>{% trans 'Filter' %}</h2>
+                    {% for spec in cl.filter_specs %}{% admin_list_filter cl spec %}{% endfor %}
+                </div>
+            {% endif %}
+        {% endblock %}
+
+        {% block result_list %}
+            {% if action_form and actions_on_top and cl.show_admin_actions %}{% admin_actions %}{% endif %}
+            {% result_list cl %}
+            {% if action_form and actions_on_bottom and cl.show_admin_actions %}{% admin_actions %}{% endif %}
+        {% endblock %}
+
+        {% block pagination %}{% pagination cl %}{% endblock %}
+    </div>
+</div>
+{% endblock %}

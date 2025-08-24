@@ -1,0 +1,33 @@
+Django==5.0.2
+django-crispy-forms==2.1
+crispy-bootstrap5==2024.2
+Pillow==10.2.0
+opencv-python==4.9.0.80
+numpy==1.26.4
+matplotlib==3.8.3
+seaborn==0.13.2
+pandas==2.2.1
+channels==4.0.0
+channels-redis==4.2.0
+daphne==4.1.0
+ultralytics==8.2.0
+redis==5.2.1
+celery==5.4.0
+requests==2.32.3
+websockets==13.0
+
+# FastAPI and related dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+sqlalchemy==2.0.23
+alembic==1.12.1
+psycopg2-binary==2.9.9
+
+# AI and ML dependencies
+insightface==0.7.3
+onnxruntime==1.16.3
+torch==2.1.1
+torchvision==0.16.1

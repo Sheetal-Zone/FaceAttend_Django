@@ -1,0 +1,305 @@
+{% extends 'base.html' %}
+
+{% block title %}Students{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-people-fill me-2"></i>{% if filter_type %}{{ filter_type }}{% else %}Students{% endif %}</h2>
+    <a href="{% url 'attendance:student_add' %}" class="btn btn-primary">
+        <i class="bi bi-person-plus me-2"></i>Add Student
+    </a>
+</div>
+
+<!-- Student Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h6 class="card-title text-muted">Total</h6>
+                <h4 class="text-primary">{{ total_count }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h6 class="card-title text-muted">Not Assessed</h6>
+                <h4 class="text-warning">{{ not_assessed_count }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h6 class="card-title text-muted">Active</h6>
+                <h4 class="text-success">{{ active_count }}</h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search and Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <input type="text" class="form-control" name="search" 
+                       placeholder="Search by name, roll number, email, or phone..." 
+                       value="{{ search_query }}">
+            </div>
+            <div class="col-md-2">
+                <select class="form-control" name="branch">
+                    <option value="">All Branches</option>
+                    <option value="CSE" {% if request.GET.branch == 'CSE' %}selected{% endif %}>CSE</option>
+                    <option value="ECE" {% if request.GET.branch == 'ECE' %}selected{% endif %}>ECE</option>
+                    <option value="ME" {% if request.GET.branch == 'ME' %}selected{% endif %}>ME</option>
+                    <option value="CE" {% if request.GET.branch == 'CE' %}selected{% endif %}>CE</option>
+                    <option value="IT" {% if request.GET.branch == 'IT' %}selected{% endif %}>IT</option>
+                    <option value="EEE" {% if request.GET.branch == 'EEE' %}selected{% endif %}>EEE</option>
+                    <option value="AI" {% if request.GET.branch == 'AI' %}selected{% endif %}>AI</option>
+                    <option value="DS" {% if request.GET.branch == 'DS' %}selected{% endif %}>DS</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-control" name="year">
+                    <option value="">All Years</option>
+                    <option value="1" {% if request.GET.year == '1' %}selected{% endif %}>1st Year</option>
+                    <option value="2" {% if request.GET.year == '2' %}selected{% endif %}>2nd Year</option>
+                    <option value="3" {% if request.GET.year == '3' %}selected{% endif %}>3rd Year</option>
+                    <option value="4" {% if request.GET.year == '4' %}selected{% endif %}>4th Year</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-control" name="section">
+                    <option value="">All Sections</option>
+                    <option value="A" {% if request.GET.section == 'A' %}selected{% endif %}>Section A</option>
+                    <option value="B" {% if request.GET.section == 'B' %}selected{% endif %}>Section B</option>
+                    <option value="C" {% if request.GET.section == 'C' %}selected{% endif %}>Section C</option>
+                    <option value="D" {% if request.GET.section == 'D' %}selected{% endif %}>Section D</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-control" name="placement_status">
+                    <option value="">All Placement</option>
+                    <option value="Not Placed" {% if request.GET.placement_status == 'Not Placed' %}selected{% endif %}>Not Placed</option>
+                    <option value="Placed" {% if request.GET.placement_status == 'Placed' %}selected{% endif %}>Placed</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-control" name="assessment_status">
+                    <option value="">All Assessment</option>
+                    <option value="Not Assessed" {% if request.GET.assessment_status == 'Not Assessed' %}selected{% endif %}>Not Assessed</option>
+                    <option value="Assessed" {% if request.GET.assessment_status == 'Assessed' %}selected{% endif %}>Assessed</option>
+                    <option value="Under Review" {% if request.GET.assessment_status == 'Under Review' %}selected{% endif %}>Under Review</option>
+                    <option value="Completed" {% if request.GET.assessment_status == 'Completed' %}selected{% endif %}>Completed</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search me-2"></i>Search
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Students Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Photo</th>
+                        <th>Name</th>
+                        <th>Roll Number</th>
+                        <th>Branch</th>
+                        <th>Year</th>
+                        <th>Section</th>
+                        <th>Career Status</th>
+                        <th>Contact</th>
+                        <th>Status</th>
+                        <th>Attendance %</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in students %}
+                    <tr>
+                        <td>
+                            {% if student.reference_image %}
+                                <img src="{{ student.reference_image.url }}" 
+                                     alt="{{ student.name }}" 
+                                     class="rounded-circle" 
+                                     width="50" height="50"
+                                     style="object-fit: cover;">
+                            {% else %}
+                                <div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center" 
+                                     style="width: 50px; height: 50px;">
+                                    <i class="bi bi-person text-white"></i>
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>{{ student.name }}</strong>
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ student.roll_number }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">{{ student.get_branch_display }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-primary">{{ student.get_year_display }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-warning text-dark">{{ student.get_section_display }}</span>
+                        </td>
+                        <td>
+                            <div class="mb-1">
+                                <span class="badge {% if student.placement_status == 'Placed' %}bg-success{% elif student.placement_status == 'Internship' %}bg-info{% elif student.placement_status == 'Higher Studies' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                    {{ student.get_placement_status_display }}
+                                </span>
+                            </div>
+                            <div>
+                                <span class="badge {% if student.assessment_status == 'Assessed' %}bg-success{% elif student.assessment_status == 'Under Review' %}bg-warning{% elif student.assessment_status == 'Completed' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                    {{ student.get_assessment_status_display }}
+                                </span>
+                            </div>
+                        </td>
+                        <td>
+                            <div>
+                                {% if student.email %}
+                                    <small class="d-block text-muted">
+                                        <i class="bi bi-envelope me-1"></i>{{ student.email }}
+                                    </small>
+                                {% endif %}
+                                {% if student.phone_number %}
+                                    <small class="d-block text-muted">
+                                        <i class="bi bi-telephone me-1"></i>{{ student.phone_number }}
+                                    </small>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if student.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% with percentage=student.get_attendance_percentage %}
+                                {% if percentage >= 75 %}
+                                    <span class="badge bg-success">{{ percentage }}%</span>
+                                {% elif percentage >= 50 %}
+                                    <span class="badge bg-warning text-dark">{{ percentage }}%</span>
+                                {% else %}
+                                    <span class="badge bg-danger">{{ percentage }}%</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'attendance:student_edit' student.pk %}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                        onclick="deleteStudent({{ student.pk }}, '{{ student.name }}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox display-4"></i>
+                            <p class="mt-2">No students found</p>
+                            <p class="text-muted">Add your first student to get started.</p>
+                            <a href="{% url 'attendance:student_add' %}" class="btn btn-primary">
+                                <i class="bi bi-person-plus me-2"></i>Add Student
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <nav aria-label="Students pagination" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if request.GET.branch %}&branch={{ request.GET.branch }}{% endif %}{% if request.GET.year %}&year={{ request.GET.year }}{% endif %}{% if request.GET.section %}&section={{ request.GET.section }}{% endif %}{% if request.GET.placement_status %}&placement_status={{ request.GET.placement_status }}{% endif %}{% if request.GET.assessment_status %}&assessment_status={{ request.GET.assessment_status }}{% endif %}">Previous</a>
+                    </li>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if request.GET.branch %}&branch={{ request.GET.branch }}{% endif %}{% if request.GET.year %}&year={{ request.GET.year }}{% endif %}{% if request.GET.section %}&section={{ request.GET.section }}{% endif %}{% if request.GET.placement_status %}&placement_status={{ request.GET.placement_status }}{% endif %}{% if request.GET.assessment_status %}&assessment_status={{ request.GET.assessment_status }}{% endif %}">{{ num }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if request.GET.branch %}&branch={{ request.GET.branch }}{% endif %}{% if request.GET.year %}&year={{ request.GET.year }}{% endif %}{% if request.GET.section %}&section={{ request.GET.section }}{% endif %}{% if request.GET.placement_status %}&placement_status={{ request.GET.placement_status }}{% endif %}{% if request.GET.assessment_status %}&assessment_status={{ request.GET.assessment_status }}{% endif %}">Next</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete student <strong id="studentName"></strong>?</p>
+                <p class="text-danger">This action cannot be undone and will remove all attendance records for this student.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Delete Student</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function deleteStudent(studentId, studentName) {
+    document.getElementById('studentName').textContent = studentName;
+    document.getElementById('deleteForm').action = `/students/${studentId}/delete/`;
+    
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+}
+
+// Auto-refresh search results when filters change
+document.querySelectorAll('select[name="branch"], select[name="year"], select[name="section"], select[name="placement_status"], select[name="assessment_status"]').forEach(function(select) {
+    select.addEventListener('change', function() {
+        document.querySelector('form[method="get"]').submit();
+    });
+});
+</script>
+{% endblock %}

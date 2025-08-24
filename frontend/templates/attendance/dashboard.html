@@ -1,0 +1,975 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Face Attendance System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-speedometer2 me-2"></i>
+        Real-Time Dashboard
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="location.reload()">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+            <button type="button" class="btn btn-sm btn-success" onclick="startDetection()">
+                <i class="bi bi-play-circle me-1"></i>Start Detection
+            </button>
+            <button type="button" class="btn btn-sm btn-danger" onclick="stopDetection()">
+                <i class="bi bi-stop-circle me-1"></i>Stop Detection
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Real-Time Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-white-50 text-uppercase mb-1">
+                            Faces Detected
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-white" id="facesDetected">{{ total_faces_detected|default:"0" }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-eye-fill fa-2x text-white-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-white-50 text-uppercase mb-1">
+                            Faces Recognized
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-white" id="facesRecognized">{{ total_faces_recognized|default:"0" }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-person-check-fill fa-2x text-white-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card h-100" style="cursor: pointer;" onclick="showUnrecognizedFaces()">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-white-50 text-uppercase mb-1">
+                            Unrecognized Faces
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-white" id="unrecognizedFaces">{{ total_unrecognized_faces|default:"0" }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-person-x-fill fa-2x text-white-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card h-100" style="cursor: pointer;" onclick="showNotAssessedStudents()">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-white-50 text-uppercase mb-1">
+                            Not Assessed
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-white" id="notAssessedStudents">{{ total_recognized_not_assessed|default:"0" }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-person-dash-fill fa-2x text-white-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Camera Grid Layout -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-camera-video me-2"></i>
+                    Live Camera Feeds
+                </h6>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="setGridSize(2)">2x2</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="setGridSize(4)">2x2</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="setGridSize(6)">3x2</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="cameraGrid" class="row">
+                    <!-- Camera feeds will be dynamically added here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Status -->
+<div class="row mb-4">
+    <div class="col-xl-6 col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-graph-up me-2"></i>
+                    Recognition Performance
+                </h6>
+            </div>
+            <div class="card-body">
+                <canvas id="performanceChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-6 col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-pie-chart me-2"></i>
+                    System Status
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <div class="text-center">
+                            <h4 class="text-primary" id="activeCameras">{{ active_cameras|default:"0" }}</h4>
+                            <small class="text-muted">Active Cameras</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center">
+                            <h4 class="text-success" id="activeSessions">{{ active_sessions|default:"0" }}</h4>
+                            <small class="text-muted">Active Sessions</small>
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-12">
+                        <div class="text-center">
+                            <h4 class="text-info" id="avgProcessingTime">{{ average_processing_time|default:"0.0" }}ms</h4>
+                            <small class="text-muted">Avg Processing Time</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-activity me-2"></i>
+                    Recent Recognition Activity
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="recentActivity">
+                    {% if recent_attendance %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>Time</th>
+                                        <th>Camera</th>
+                                        <th>Confidence</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for attendance in recent_attendance|slice:":5" %}
+                                    <tr>
+                                        <td>{{ attendance.student.name }} ({{ attendance.student.roll_number }})</td>
+                                        <td>{{ attendance.time|time:"H:i" }}</td>
+                                        <td>
+                                            <span class="badge bg-{% if attendance.camera_type == 'WEBCAM' %}info{% else %}primary{% endif %}">
+                                                {{ attendance.camera_type|default:"CCTV" }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if attendance.confidence_score %}
+                                                <span class="badge bg-{% if attendance.confidence_score >= 0.8 %}success{% elif attendance.confidence_score >= 0.6 %}warning{% else %}danger{% endif %}">
+                                                    {{ attendance.confidence_score|floatformat:2 }}
+                                                </span>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-success">{{ attendance.status }}</span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-inbox fa-3x mb-3"></i>
+                            <p>No recent recognition activity.</p>
+                            <p class="text-muted">Start face detection to see live activity.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-lightning me-2"></i>
+                    Quick Actions
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'attendance:student_add' %}" class="btn btn-primary w-100">
+                            <i class="bi bi-person-plus me-2"></i>
+                            Add Student
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'attendance:attendance_list' %}" class="btn btn-info w-100">
+                            <i class="bi bi-calendar-check me-2"></i>
+                            View Attendance
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'attendance:live_detection' %}" class="btn btn-success w-100">
+                            <i class="bi bi-eye me-2"></i>
+                            Live Detection
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'attendance:camera_streams' %}" class="btn btn-warning w-100">
+                            <i class="bi bi-camera-video me-2"></i>
+                            Manage Cameras
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Unrecognized Faces Modal -->
+<div class="modal fade" id="unrecognizedFacesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Unrecognized Faces</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="unrecognizedFacesList">
+                    <!-- Unrecognized faces will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Not Assessed Students Modal -->
+<div class="modal fade" id="notAssessedStudentsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Students Not Assessed</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="notAssessedStudentsList">
+                    <!-- Not assessed students will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Student from Face Modal -->
+<div class="modal fade" id="addStudentFromFaceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Student</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addStudentFromFaceForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="studentName" class="form-label">Full Name *</label>
+                                <input type="text" class="form-control" id="studentName" name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="studentRoll" class="form-label">Roll Number *</label>
+                                <input type="text" class="form-control" id="studentRoll" name="roll_number" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="studentBranch" class="form-label">Branch</label>
+                                <select class="form-select" id="studentBranch" name="branch">
+                                    <option value="CSE">Computer Science</option>
+                                    <option value="ECE">Electronics</option>
+                                    <option value="ME">Mechanical</option>
+                                    <option value="CE">Civil</option>
+                                    <option value="IT">Information Technology</option>
+                                    <option value="EEE">Electrical</option>
+                                    <option value="AI">Artificial Intelligence</option>
+                                    <option value="DS">Data Science</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="studentYear" class="form-label">Year</label>
+                                <select class="form-select" id="studentYear" name="year">
+                                    <option value="1">1st Year</option>
+                                    <option value="2">2nd Year</option>
+                                    <option value="3">3rd Year</option>
+                                    <option value="4">4th Year</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="studentSection" class="form-label">Section</label>
+                                <select class="form-select" id="studentSection" name="section">
+                                    <option value="A">Section A</option>
+                                    <option value="B">Section B</option>
+                                    <option value="C">Section C</option>
+                                    <option value="D">Section D</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="studentEmail" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="studentEmail" name="email">
+                    </div>
+                    <div class="mb-3">
+                        <label for="studentPhone" class="form-label">Phone Number</label>
+                        <input type="tel" class="form-control" id="studentPhone" name="phone_number">
+                    </div>
+                    <input type="hidden" id="faceEmbedding" name="face_embedding">
+                    <input type="hidden" id="faceImage" name="face_image">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveStudentFromFace()">Save Student</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// WebSocket connection for real-time updates
+let detectionSocket = null;
+let statsSocket = null;
+let currentGridSize = 2;
+let detectionActive = false;
+
+// Initialize WebSocket connections
+function initializeWebSockets() {
+    // Detection WebSocket
+    detectionSocket = new WebSocket(`ws://${window.location.host}/ws/detection/`);
+    
+    detectionSocket.onopen = function(e) {
+        console.log("Detection WebSocket connected");
+    };
+    
+    detectionSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        handleDetectionMessage(data);
+    };
+    
+    detectionSocket.onclose = function(e) {
+        console.log("Detection WebSocket disconnected");
+    };
+    
+    // Stats WebSocket
+    statsSocket = new WebSocket(`ws://${window.location.host}/ws/stats/`);
+    
+    statsSocket.onopen = function(e) {
+        console.log("Stats WebSocket connected");
+        requestStats();
+    };
+    
+    statsSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        handleStatsMessage(data);
+    };
+    
+    statsSocket.onclose = function(e) {
+        console.log("Stats WebSocket disconnected");
+    };
+}
+
+// Handle detection messages
+function handleDetectionMessage(data) {
+    switch(data.type) {
+        case 'detection_started':
+            detectionActive = true;
+            updateDetectionStatus();
+            break;
+        case 'detection_stopped':
+            detectionActive = false;
+            updateDetectionStatus();
+            break;
+        case 'frame_processed':
+            updateRecognitionResults(data.results);
+            break;
+        case 'error':
+            showError(data.message);
+            break;
+    }
+}
+
+// Handle stats messages
+function handleStatsMessage(data) {
+    switch(data.type) {
+        case 'stats_update':
+            updateStats(data.stats);
+            break;
+        case 'error':
+            showError(data.message);
+            break;
+    }
+}
+
+// Update real-time statistics
+function updateStats(stats) {
+    document.getElementById('facesDetected').textContent = stats.total_faces_detected;
+    document.getElementById('facesRecognized').textContent = stats.total_faces_recognized;
+    document.getElementById('unrecognizedFaces').textContent = stats.total_unrecognized_faces;
+    document.getElementById('notAssessedStudents').textContent = stats.total_recognized_not_assessed;
+    document.getElementById('activeCameras').textContent = stats.active_cameras;
+    document.getElementById('activeSessions').textContent = stats.active_sessions;
+    document.getElementById('avgProcessingTime').textContent = stats.average_processing_time.toFixed(2) + 'ms';
+}
+
+// Request stats update
+function requestStats() {
+    if (statsSocket && statsSocket.readyState === WebSocket.OPEN) {
+        statsSocket.send(JSON.stringify({
+            type: 'get_stats'
+        }));
+    }
+}
+
+// Start face detection
+function startDetection() {
+    fetch('/detection/start/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccess(data.message);
+            updateDetectionStatus();
+        } else {
+            showError(data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error starting detection:', error);
+        showError('Failed to start detection');
+    });
+}
+
+// Stop face detection
+function stopDetection() {
+    fetch('/detection/stop/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccess(data.message);
+            updateDetectionStatus();
+        } else {
+            showError(data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error stopping detection:', error);
+        showError('Failed to stop detection');
+    });
+}
+
+// Update detection status
+function updateDetectionStatus() {
+    fetch('/detection/status/')
+    .then(response => response.json())
+    .then(data => {
+        // Update UI based on detection status
+        const startBtn = document.querySelector('button[onclick="startDetection()"]');
+        const stopBtn = document.querySelector('button[onclick="stopDetection()"]');
+        
+        if (data.is_detection_active) {
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            startBtn.classList.remove('btn-success');
+            startBtn.classList.add('btn-secondary');
+            stopBtn.classList.remove('btn-secondary');
+            stopBtn.classList.add('btn-danger');
+        } else {
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            startBtn.classList.remove('btn-secondary');
+            startBtn.classList.add('btn-success');
+            stopBtn.classList.remove('btn-danger');
+            stopBtn.classList.add('btn-secondary');
+        }
+    })
+    .catch(error => {
+        console.error('Error updating detection status:', error);
+    });
+}
+
+// Set grid size
+function setGridSize(size) {
+    currentGridSize = size;
+    updateCameraGrid();
+}
+
+// Update camera grid
+function updateCameraGrid() {
+    const grid = document.getElementById('cameraGrid');
+    grid.innerHTML = '';
+    
+    // Load cameras from API
+    fetch('/api/cameras/')
+        .then(response => response.json())
+        .then(cameras => {
+            const activeCameras = cameras.filter(camera => camera.is_active);
+            
+            for (let i = 0; i < Math.min(currentGridSize, activeCameras.length); i++) {
+                const camera = activeCameras[i];
+                const cameraElement = createCameraElement(camera, i);
+                grid.appendChild(cameraElement);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading cameras:', error);
+        });
+}
+
+// Create camera element
+function createCameraElement(camera, index) {
+    const col = document.createElement('div');
+    col.className = 'col-md-6 mb-3';
+    
+    col.innerHTML = `
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-camera-video me-2"></i>
+                    ${camera.name}
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="camera-feed" id="camera-${camera.id}">
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-camera-video-off fa-3x mb-3"></i>
+                        <p>Camera feed not available</p>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <i class="bi bi-geo-alt me-1"></i>${camera.location || 'No location'}
+                    </small>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    return col;
+}
+
+// Show unrecognized faces
+function showUnrecognizedFaces() {
+    fetch('/api/unrecognized-faces/')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('unrecognizedFacesList');
+            
+            if (data.faces.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-check-circle fa-3x mb-3"></i>
+                        <p>No unrecognized faces</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = data.faces.map(face => `
+                    <div class="row mb-3 align-items-center">
+                        <div class="col-md-3">
+                            <img src="data:image/jpeg;base64,${face.face_image}" 
+                                 class="img-fluid rounded" alt="Unrecognized face">
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>Detected:</strong> ${face.detection_time}</p>
+                            <p class="mb-1"><strong>Camera:</strong> ${face.camera_source}</p>
+                            <p class="mb-0"><strong>Confidence:</strong> ${face.confidence_score.toFixed(2)}</p>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-primary btn-sm mb-2 w-100" 
+                                    onclick="addStudentFromFace('${face.id}')">
+                                <i class="bi bi-person-plus me-1"></i>Add as Student
+                            </button>
+                            <button class="btn btn-secondary btn-sm w-100" 
+                                    onclick="ignoreFace('${face.id}')">
+                                <i class="bi bi-x-circle me-1"></i>Ignore
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            const modal = new bootstrap.Modal(document.getElementById('unrecognizedFacesModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error loading unrecognized faces:', error);
+            showError('Failed to load unrecognized faces');
+        });
+}
+
+// Show not assessed students
+function showNotAssessedStudents() {
+    fetch('/api/not-assessed-students/')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('notAssessedStudentsList');
+            
+            if (data.students.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-check-circle fa-3x mb-3"></i>
+                        <p>All students have been assessed</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Branch</th>
+                                    <th>Year</th>
+                                    <th>Last Recognition</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.students.map(student => `
+                                    <tr>
+                                        <td>
+                                            <strong>${student.name}</strong><br>
+                                            <small class="text-muted">${student.roll_number}</small>
+                                        </td>
+                                        <td>${student.branch}</td>
+                                        <td>${student.year} Year</td>
+                                        <td>${student.last_recognition || 'Never'}</td>
+                                        <td>
+                                            <button class="btn btn-primary btn-sm" 
+                                                    onclick="viewStudentDetails('${student.id}')">
+                                                <i class="bi bi-eye me-1"></i>View Details
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            
+            const modal = new bootstrap.Modal(document.getElementById('notAssessedStudentsModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error loading not assessed students:', error);
+            showError('Failed to load not assessed students');
+        });
+}
+
+// Add student from face
+function addStudentFromFace(faceId) {
+    fetch(`/api/unrecognized-faces/${faceId}/`)
+        .then(response => response.json())
+        .then(face => {
+            document.getElementById('faceEmbedding').value = face.face_embedding;
+            document.getElementById('faceImage').value = face.face_image;
+            
+            const modal = new bootstrap.Modal(document.getElementById('addStudentFromFaceModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error loading face data:', error);
+            showError('Failed to load face data');
+        });
+}
+
+// Save student from face
+function saveStudentFromFace() {
+    const form = document.getElementById('addStudentFromFaceForm');
+    const formData = new FormData(form);
+    
+    fetch('/api/students/', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccess('Student added successfully');
+            bootstrap.Modal.getInstance(document.getElementById('addStudentFromFaceModal')).hide();
+            bootstrap.Modal.getInstance(document.getElementById('unrecognizedFacesModal')).hide();
+            location.reload();
+        } else {
+            showError(data.message || 'Failed to add student');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving student:', error);
+        showError('Failed to save student');
+    });
+}
+
+// Ignore face
+function ignoreFace(faceId) {
+    fetch(`/api/unrecognized-faces/${faceId}/ignore/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccess('Face ignored successfully');
+            showUnrecognizedFaces(); // Refresh the list
+        } else {
+            showError(data.message || 'Failed to ignore face');
+        }
+    })
+    .catch(error => {
+        console.error('Error ignoring face:', error);
+        showError('Failed to ignore face');
+    });
+}
+
+// View student details
+function viewStudentDetails(studentId) {
+    window.location.href = `/students/${studentId}/edit/`;
+}
+
+// Update detection status
+function updateDetectionStatus() {
+    const startBtn = document.querySelector('button[onclick="startDetection()"]');
+    const stopBtn = document.querySelector('button[onclick="stopDetection()"]');
+    
+    if (detectionActive) {
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        startBtn.innerHTML = '<i class="bi bi-play-circle me-1"></i>Running...';
+    } else {
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        startBtn.innerHTML = '<i class="bi bi-play-circle me-1"></i>Start Detection';
+    }
+}
+
+// Update recognition results
+function updateRecognitionResults(results) {
+    // Update recent activity
+    const container = document.getElementById('recentActivity');
+    
+    if (results.recognition_results && results.recognition_results.length > 0) {
+        const newRow = results.recognition_results.map(result => `
+            <tr>
+                <td>${result.student_name} (${result.student_roll})</td>
+                <td>${new Date().toLocaleTimeString()}</td>
+                <td><span class="badge bg-info">Live</span></td>
+                <td><span class="badge bg-success">${result.confidence.toFixed(2)}</span></td>
+                <td><span class="badge bg-success">Present</span></td>
+            </tr>
+        `).join('');
+        
+        const tbody = container.querySelector('tbody');
+        if (tbody) {
+            tbody.insertAdjacentHTML('afterbegin', newRow);
+            
+            // Remove old rows if more than 5
+            const rows = tbody.querySelectorAll('tr');
+            if (rows.length > 5) {
+                rows[rows.length - 1].remove();
+            }
+        }
+    }
+}
+
+// Utility functions
+function showSuccess(message) {
+    // Create a toast notification
+    const toast = document.createElement('div');
+    toast.className = 'toast align-items-center text-white bg-success border-0 position-fixed';
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999;';
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                <i class="bi bi-check-circle me-2"></i>${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    document.body.appendChild(toast);
+    
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    // Remove toast after it's hidden
+    toast.addEventListener('hidden.bs.toast', () => {
+        document.body.removeChild(toast);
+    });
+}
+
+function showError(message) {
+    // Create a toast notification
+    const toast = document.createElement('div');
+    toast.className = 'toast align-items-center text-white bg-danger border-0 position-fixed';
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999;';
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                <i class="bi bi-exclamation-triangle me-2"></i>${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    document.body.appendChild(toast);
+    
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    // Remove toast after it's hidden
+    toast.addEventListener('hidden.bs.toast', () => {
+        document.body.removeChild(toast);
+    });
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Performance Chart
+const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+const performanceChart = new Chart(performanceCtx, {
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'Recognition Accuracy',
+            data: [],
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.1,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 100,
+                ticks: {
+                    callback: function(value) {
+                        return value + '%';
+                    }
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
+});
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initializeWebSockets();
+    updateCameraGrid();
+    updateDetectionStatus();
+    
+    // Request stats every 5 seconds
+    setInterval(requestStats, 5000);
+    
+    // Update detection status every 10 seconds
+    setInterval(updateDetectionStatus, 10000);
+});
+</script>
+{% endblock %}

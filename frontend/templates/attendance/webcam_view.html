@@ -1,0 +1,446 @@
+{% extends 'base.html' %}
+
+{% block title %}Webcam Attendance - Face Attendance System{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-camera"></i> Webcam Attendance
+                </h1>
+                <a href="{% url 'attendance:dashboard' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Webcam Preview -->
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-video"></i> Live Webcam Feed
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="webcam-container">
+                        <video id="webcamVideo" autoplay muted playsinline class="w-100" style="max-height: 500px; border-radius: 8px;"></video>
+                        <canvas id="webcamCanvas" style="display: none;"></canvas>
+                    </div>
+                    
+                    <div class="webcam-controls mt-3">
+                        <button id="startWebcamBtn" class="btn btn-success me-2">
+                            <i class="fas fa-play"></i> Start Webcam
+                        </button>
+                        <button id="stopWebcamBtn" class="btn btn-danger me-2" style="display: none;">
+                            <i class="fas fa-stop"></i> Stop Webcam
+                        </button>
+                        <button id="captureBtn" class="btn btn-primary me-2" style="display: none;">
+                            <i class="fas fa-camera"></i> Capture & Detect
+                        </button>
+                        <span id="webcamStatus" class="badge bg-secondary">Webcam not started</span>
+                    </div>
+                    
+                    <div id="detectionResults" class="mt-3" style="display: none;">
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-info-circle"></i> Detection Results</h6>
+                            <div id="detectionInfo"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration and Status -->
+        <div class="col-lg-4">
+            <!-- Webcam Configuration -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-cog"></i> Webcam Configuration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if webcam_config %}
+                        <div class="mb-3">
+                            <label class="form-label">Device ID:</label>
+                            <input type="number" id="deviceId" class="form-control" value="{{ webcam_config.device_id }}" min="0">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Resolution:</label>
+                            <select id="resolution" class="form-select">
+                                <option value="640,480" {% if webcam_config.resolution_width == 640 and webcam_config.resolution_height == 480 %}selected{% endif %}>640x480</option>
+                                <option value="1280,720" {% if webcam_config.resolution_width == 1280 and webcam_config.resolution_height == 720 %}selected{% endif %}>1280x720 (HD)</option>
+                                <option value="1920,1080" {% if webcam_config.resolution_width == 1920 and webcam_config.resolution_height == 1080 %}selected{% endif %}>1920x1080 (Full HD)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">FPS:</label>
+                            <input type="number" id="fps" class="form-control" value="{{ webcam_config.fps }}" min="1" max="60">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confidence Threshold:</label>
+                            <input type="range" id="confidenceThreshold" class="form-range" min="0.1" max="1.0" step="0.1" value="{{ webcam_config.confidence_threshold }}">
+                            <div class="text-center">
+                                <span id="confidenceValue">{{ webcam_config.confidence_threshold }}</span>
+                            </div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="autoMarkAttendance" {% if webcam_config.attendance_auto_mark %}checked{% endif %}>
+                            <label class="form-check-label" for="autoMarkAttendance">
+                                Auto-mark attendance when face is recognized
+                            </label>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> No webcam configuration found. Please configure webcam settings in the admin panel.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Recent Attendance -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-clock"></i> Recent Attendance
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="recentAttendance">
+                        <div class="text-center text-muted">
+                            <i class="fas fa-spinner fa-spin"></i> Loading...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Student Recognition Modal -->
+    <div class="modal fade" id="studentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-user-check"></i> Student Recognized
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="studentInfo"></div>
+                    <div class="mt-3">
+                        <label class="form-label">Confidence Score:</label>
+                        <div class="progress">
+                            <div id="confidenceBar" class="progress-bar" role="progressbar"></div>
+                        </div>
+                        <small class="text-muted" id="confidenceText"></small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" id="markAttendanceBtn">
+                        <i class="fas fa-check"></i> Mark Attendance
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let webcamStream = null;
+let videoElement = null;
+let canvasElement = null;
+let currentStudent = null;
+let currentConfidence = 0;
+
+document.addEventListener('DOMContentLoaded', function() {
+    videoElement = document.getElementById('webcamVideo');
+    canvasElement = document.getElementById('webcamCanvas');
+    
+    // Initialize controls
+    initializeControls();
+    
+    // Load recent attendance
+    loadRecentAttendance();
+    
+    // Update confidence display
+    document.getElementById('confidenceThreshold').addEventListener('input', function() {
+        document.getElementById('confidenceValue').textContent = this.value;
+    });
+});
+
+function initializeControls() {
+    document.getElementById('startWebcamBtn').addEventListener('click', startWebcam);
+    document.getElementById('stopWebcamBtn').addEventListener('click', stopWebcam);
+    document.getElementById('captureBtn').addEventListener('click', captureAndDetect);
+    document.getElementById('markAttendanceBtn').addEventListener('click', markAttendance);
+}
+
+async function startWebcam() {
+    try {
+        const deviceId = parseInt(document.getElementById('deviceId').value) || 0;
+        const resolution = document.getElementById('resolution').value.split(',');
+        const fps = parseInt(document.getElementById('fps').value) || 30;
+        
+        const constraints = {
+            video: {
+                deviceId: deviceId ? { exact: deviceId } : undefined,
+                width: { ideal: parseInt(resolution[0]) },
+                height: { ideal: parseInt(resolution[1]) },
+                frameRate: { ideal: fps }
+            }
+        };
+        
+        webcamStream = await navigator.mediaDevices.getUserMedia(constraints);
+        videoElement.srcObject = webcamStream;
+        
+        // Update UI
+        document.getElementById('startWebcamBtn').style.display = 'none';
+        document.getElementById('stopWebcamBtn').style.display = 'inline-block';
+        document.getElementById('captureBtn').style.display = 'inline-block';
+        document.getElementById('webcamStatus').textContent = 'Webcam active';
+        document.getElementById('webcamStatus').className = 'badge bg-success';
+        
+        showMessage('Webcam started successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error accessing webcam:', error);
+        showMessage('Error accessing webcam. Please check permissions.', 'error');
+    }
+}
+
+function stopWebcam() {
+    if (webcamStream) {
+        webcamStream.getTracks().forEach(track => track.stop());
+        webcamStream = null;
+        videoElement.srcObject = null;
+        
+        // Update UI
+        document.getElementById('startWebcamBtn').style.display = 'inline-block';
+        document.getElementById('stopWebcamBtn').style.display = 'none';
+        document.getElementById('captureBtn').style.display = 'none';
+        document.getElementById('webcamStatus').textContent = 'Webcam stopped';
+        document.getElementById('webcamStatus').className = 'badge bg-secondary';
+        document.getElementById('detectionResults').style.display = 'none';
+        
+        showMessage('Webcam stopped.', 'warning');
+    }
+}
+
+function captureAndDetect() {
+    if (!webcamStream) {
+        showMessage('Please start the webcam first.', 'warning');
+        return;
+    }
+    
+    // Set canvas dimensions
+    canvasElement.width = videoElement.videoWidth;
+    canvasElement.height = videoElement.videoHeight;
+    
+    // Draw video frame to canvas
+    const ctx = canvasElement.getContext('2d');
+    ctx.drawImage(videoElement, 0, 0);
+    
+    // Simulate face detection (replace with actual face recognition)
+    simulateFaceDetection();
+}
+
+function simulateFaceDetection() {
+    // This is a simulation - replace with actual face recognition logic
+    const students = [
+        { id: 1, name: 'John Doe', roll_number: 'CS001', confidence: 0.85 },
+        { id: 2, name: 'Jane Smith', roll_number: 'CS002', confidence: 0.92 },
+        { id: 3, name: 'Bob Johnson', roll_number: 'CS003', confidence: 0.78 }
+    ];
+    
+    const threshold = parseFloat(document.getElementById('confidenceThreshold').value);
+    const randomStudent = students[Math.floor(Math.random() * students.length)];
+    const confidence = randomStudent.confidence + (Math.random() - 0.5) * 0.1;
+    
+    if (confidence >= threshold) {
+        currentStudent = randomStudent;
+        currentConfidence = confidence;
+        showStudentModal(randomStudent, confidence);
+    } else {
+        showMessage('No face recognized with sufficient confidence.', 'warning');
+    }
+}
+
+function showStudentModal(student, confidence) {
+    const studentInfo = document.getElementById('studentInfo');
+    const confidenceBar = document.getElementById('confidenceBar');
+    const confidenceText = document.getElementById('confidenceText');
+    
+    studentInfo.innerHTML = `
+        <div class="text-center">
+            <i class="fas fa-user-circle fa-3x text-primary mb-3"></i>
+            <h5>${student.name}</h5>
+            <p class="text-muted">Roll Number: ${student.roll_number}</p>
+        </div>
+    `;
+    
+    const percentage = Math.round(confidence * 100);
+    confidenceBar.style.width = percentage + '%';
+    confidenceBar.className = `progress-bar ${percentage >= 80 ? 'bg-success' : percentage >= 60 ? 'bg-warning' : 'bg-danger'}`;
+    confidenceText.textContent = `${percentage}% (${confidence.toFixed(3)})`;
+    
+    const modal = new bootstrap.Modal(document.getElementById('studentModal'));
+    modal.show();
+}
+
+function markAttendance() {
+    if (!currentStudent) return;
+    
+    const autoMark = document.getElementById('autoMarkAttendance').checked;
+    
+    fetch('{% url "attendance:webcam_api" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            student_id: currentStudent.id,
+            confidence_score: currentConfidence,
+            camera_location: 'Laptop Webcam',
+            processing_time: 0.1,
+            frame_resolution: '1280x720'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`Attendance marked for ${data.student_name}!`, 'success');
+            loadRecentAttendance();
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('studentModal'));
+            modal.hide();
+        } else {
+            showMessage(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showMessage('Error marking attendance.', 'error');
+    });
+}
+
+function loadRecentAttendance() {
+    fetch('{% url "attendance:api_attendance_stats" %}')
+    .then(response => response.json())
+    .then(data => {
+        const container = document.getElementById('recentAttendance');
+        container.innerHTML = `
+            <div class="row text-center">
+                <div class="col-6">
+                    <div class="border rounded p-2">
+                        <h6 class="mb-1">Today</h6>
+                        <h4 class="text-primary mb-0">${data.today_attendance}</h4>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="border rounded p-2">
+                        <h6 class="mb-1">Webcam</h6>
+                        <h4 class="text-success mb-0">${data.webcam_attendance}</h4>
+                    </div>
+                </div>
+            </div>
+        `;
+    })
+    .catch(error => {
+        console.error('Error loading attendance stats:', error);
+    });
+}
+
+function showMessage(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.container-fluid');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+
+<style>
+.webcam-container {
+    position: relative;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.webcam-container video {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.webcam-controls {
+    text-align: center;
+}
+
+#detectionResults {
+    border-top: 1px solid #dee2e6;
+    padding-top: 1rem;
+}
+
+.progress {
+    height: 20px;
+}
+
+.progress-bar {
+    transition: width 0.3s ease;
+}
+
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border: 1px solid #dee2e6;
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.alert {
+    margin-bottom: 1rem;
+}
+
+.badge {
+    font-size: 0.875em;
+}
+</style>
+{% endblock %}

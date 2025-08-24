@@ -1,0 +1,84 @@
+<div class="mb-3">
+    <label for="name" class="form-label">Camera Name *</label>
+    <input type="text" class="form-control" id="name" name="name" value="{{ camera.name|default:'' }}" required>
+</div>
+
+<div class="mb-3">
+    <label for="camera_type" class="form-label">Camera Type *</label>
+    <select class="form-select" id="camera_type" name="camera_type" onchange="toggleCameraFields()">
+        <option value="CCTV" {% if camera.camera_type == 'CCTV' or not camera.camera_type %}selected{% endif %}>CCTV/IP Camera</option>
+        <option value="WEBCAM" {% if camera.camera_type == 'WEBCAM' %}selected{% endif %}>Laptop Webcam</option>
+    </select>
+</div>
+
+<div class="mb-3">
+    <label for="location" class="form-label">Location</label>
+    <input type="text" class="form-control" id="location" name="location" value="{{ camera.location|default:'' }}" placeholder="e.g., Main Entrance, Classroom 101">
+</div>
+
+<div class="mb-3">
+    <label for="resolution_width" class="form-label">Resolution Width</label>
+    <input type="number" class="form-control" id="resolution_width" name="resolution_width" value="{{ camera.resolution_width|default:1280 }}" min="320" max="3840">
+</div>
+
+<div class="mb-3">
+    <label for="resolution_height" class="form-label">Resolution Height</label>
+    <input type="number" class="form-control" id="resolution_height" name="resolution_height" value="{{ camera.resolution_height|default:720 }}" min="240" max="2160">
+</div>
+
+<div class="mb-3">
+    <label for="fps" class="form-label">FPS (Frames Per Second)</label>
+    <input type="number" class="form-control" id="fps" name="fps" value="{{ camera.fps|default:30 }}" min="1" max="60">
+</div>
+
+<!-- CCTV Fields -->
+<div id="cctv_fields">
+    <div class="mb-3">
+        <label for="rtsp_url" class="form-label">RTSP URL</label>
+        <input type="url" class="form-control" id="rtsp_url" name="rtsp_url" value="{{ camera.rtsp_url|default:'' }}" placeholder="rtsp://username:password@ip:port/stream">
+    </div>
+    
+    <div class="mb-3">
+        <label for="http_url" class="form-label">HTTP URL</label>
+        <input type="url" class="form-control" id="http_url" name="http_url" value="{{ camera.http_url|default:'' }}" placeholder="http://ip:port/stream">
+    </div>
+</div>
+
+<!-- Webcam Fields -->
+<div id="webcam_fields" style="display: none;">
+    <div class="mb-3">
+        <label for="webcam_device_id" class="form-label">Device ID</label>
+        <input type="number" class="form-control" id="webcam_device_id" name="webcam_device_id" value="{{ camera.webcam_device_id|default:0 }}" min="0" max="10">
+        <small class="form-text text-muted">Usually 0 for built-in camera, 1 for external webcam</small>
+    </div>
+</div>
+
+<div class="mb-3">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {% if camera.is_active or not camera.id %}checked{% endif %}>
+        <label class="form-check-label" for="is_active">
+            Active
+        </label>
+    </div>
+</div>
+
+<script>
+function toggleCameraFields() {
+    const cameraType = document.getElementById('camera_type').value;
+    const cctvFields = document.getElementById('cctv_fields');
+    const webcamFields = document.getElementById('webcam_fields');
+    
+    if (cameraType === 'CCTV') {
+        cctvFields.style.display = 'block';
+        webcamFields.style.display = 'none';
+    } else if (cameraType === 'WEBCAM') {
+        cctvFields.style.display = 'none';
+        webcamFields.style.display = 'block';
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    toggleCameraFields();
+});
+</script>

@@ -1,0 +1,414 @@
+{% extends 'base.html' %}
+
+{% block title %}Live Detection - Face Attendance System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-eye-fill me-2"></i>
+        Live Face Detection
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-success" id="startDetection">
+                <i class="bi bi-play-fill me-1"></i>
+                Start Detection
+            </button>
+            <button type="button" class="btn btn-danger" id="stopDetection" style="display: none;">
+                <i class="bi bi-stop-fill me-1"></i>
+                Stop Detection
+            </button>
+        </div>
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-outline-secondary" onclick="location.reload()">
+                <i class="bi bi-arrow-clockwise me-1"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Camera Streams -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-camera-video me-2"></i>
+                    Camera Streams
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if camera_streams %}
+                    <div class="row">
+                        {% for camera in camera_streams %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-camera me-2"></i>
+                                        {{ camera.name }}
+                                        {% if camera.location %}
+                                            <small class="text-muted">({{ camera.location }})</small>
+                                        {% endif %}
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="camera-feed" data-camera-id="{{ camera.id }}">
+                                        <div class="video-container bg-dark rounded" style="height: 300px; position: relative;">
+                                            <div class="d-flex align-items-center justify-content-center h-100 text-white">
+                                                <div class="text-center">
+                                                    <i class="bi bi-camera-video-off fa-3x mb-3"></i>
+                                                    <p>Camera feed will appear here</p>
+                                                    <small class="text-muted">{{ camera.rtsp_url|default:camera.http_url }}</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2">
+                                            <span class="badge bg-secondary">Status: Inactive</span>
+                                            <span class="badge bg-info">Faces: 0</span>
+                                            <span class="badge bg-success">Recognized: 0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-camera-video-off fa-3x mb-3"></i>
+                        <h5>No camera streams configured</h5>
+                        <p>Please add camera streams in the <a href="{% url 'attendance:camera_streams' %}">Cameras</a> section.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Real-time Detection Logs -->
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-activity me-2"></i>
+                    Live Detection Logs
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="detectionLogs" style="height: 400px; overflow-y: auto;">
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-activity fa-3x mb-3"></i>
+                        <p>Detection logs will appear here in real-time</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-graph-up me-2"></i>
+                    Detection Statistics
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6 mb-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-primary" id="totalFaces">0</h4>
+                            <small class="text-muted">Faces Detected</small>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-success" id="totalRecognized">0</h4>
+                            <small class="text-muted">Students Recognized</small>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-info" id="avgProcessingTime">0ms</h4>
+                            <small class="text-muted">Avg Processing</small>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-warning" id="fps">0</h4>
+                            <small class="text-muted">FPS</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <h6>Recent Recognitions</h6>
+                <div id="recentRecognitions" style="height: 200px; overflow-y: auto;">
+                    <div class="text-center text-muted py-3">
+                        <small>No recognitions yet</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- WebSocket Connection Status -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="connectionStatus" class="toast" role="alert">
+        <div class="toast-header">
+            <i class="bi bi-wifi me-2"></i>
+            <strong class="me-auto">Connection Status</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="connectionMessage">
+            Connecting to detection feed...
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+class DetectionMonitor {
+    constructor() {
+        this.websocket = null;
+        this.isConnected = false;
+        this.detectionStats = {
+            totalFaces: 0,
+            totalRecognized: 0,
+            processingTimes: [],
+            frameCount: 0,
+            lastFpsTime: Date.now()
+        };
+        this.init();
+    }
+    
+    init() {
+        this.setupWebSocket();
+        this.setupEventListeners();
+        this.updateStats();
+    }
+    
+    setupWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/detection/`;
+        
+        this.websocket = new WebSocket(wsUrl);
+        
+        this.websocket.onopen = () => {
+            this.isConnected = true;
+            this.showConnectionStatus('Connected to detection feed', 'success');
+            console.log('WebSocket connected');
+        };
+        
+        this.websocket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            this.handleWebSocketMessage(data);
+        };
+        
+        this.websocket.onclose = () => {
+            this.isConnected = false;
+            this.showConnectionStatus('Disconnected from detection feed', 'danger');
+            console.log('WebSocket disconnected');
+            
+            // Attempt to reconnect after 5 seconds
+            setTimeout(() => {
+                if (!this.isConnected) {
+                    this.setupWebSocket();
+                }
+            }, 5000);
+        };
+        
+        this.websocket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            this.showConnectionStatus('Connection error', 'danger');
+        };
+    }
+    
+    setupEventListeners() {
+        document.getElementById('startDetection').addEventListener('click', () => {
+            this.startDetection();
+        });
+        
+        document.getElementById('stopDetection').addEventListener('click', () => {
+            this.stopDetection();
+        });
+        
+        // Send ping every 30 seconds to keep connection alive
+        setInterval(() => {
+            if (this.isConnected) {
+                this.websocket.send(JSON.stringify({
+                    type: 'ping',
+                    timestamp: Date.now()
+                }));
+            }
+        }, 30000);
+    }
+    
+    handleWebSocketMessage(data) {
+        switch (data.type) {
+            case 'detection_update':
+                this.updateDetectionStats(data);
+                this.addDetectionLog(data);
+                break;
+                
+            case 'attendance_marked':
+                this.addAttendanceLog(data);
+                this.updateRecognitionStats(data);
+                break;
+                
+            case 'pong':
+                // Connection is alive
+                break;
+                
+            default:
+                console.log('Unknown message type:', data.type);
+        }
+    }
+    
+    updateDetectionStats(data) {
+        this.detectionStats.totalFaces += data.faces_detected;
+        this.detectionStats.totalRecognized += data.students_recognized;
+        
+        if (data.processing_time) {
+            this.detectionStats.processingTimes.push(data.processing_time);
+            if (this.detectionStats.processingTimes.length > 100) {
+                this.detectionStats.processingTimes.shift();
+            }
+        }
+        
+        this.detectionStats.frameCount++;
+        this.updateStats();
+    }
+    
+    updateRecognitionStats(data) {
+        // Update camera feed display
+        const cameraFeeds = document.querySelectorAll('.camera-feed');
+        cameraFeeds.forEach(feed => {
+            const recognizedBadge = feed.querySelector('.badge.bg-success');
+            if (recognizedBadge) {
+                const currentCount = parseInt(recognizedBadge.textContent.split(': ')[1]);
+                recognizedBadge.textContent = `Recognized: ${currentCount + 1}`;
+            }
+        });
+    }
+    
+    updateStats() {
+        document.getElementById('totalFaces').textContent = this.detectionStats.totalFaces;
+        document.getElementById('totalRecognized').textContent = this.detectionStats.totalRecognized;
+        
+        if (this.detectionStats.processingTimes.length > 0) {
+            const avgTime = this.detectionStats.processingTimes.reduce((a, b) => a + b, 0) / this.detectionStats.processingTimes.length;
+            document.getElementById('avgProcessingTime').textContent = `${(avgTime * 1000).toFixed(1)}ms`;
+        }
+        
+        // Calculate FPS
+        const now = Date.now();
+        if (now - this.detectionStats.lastFpsTime >= 1000) {
+            const fps = Math.round(this.detectionStats.frameCount * 1000 / (now - this.detectionStats.lastFpsTime));
+            document.getElementById('fps').textContent = fps;
+            this.detectionStats.frameCount = 0;
+            this.detectionStats.lastFpsTime = now;
+        }
+    }
+    
+    addDetectionLog(data) {
+        const logsContainer = document.getElementById('detectionLogs');
+        const logEntry = document.createElement('div');
+        logEntry.className = 'alert alert-info alert-sm mb-2';
+        logEntry.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="bi bi-camera me-2"></i>
+                    <strong>${data.faces_detected}</strong> faces detected, 
+                    <strong>${data.students_recognized}</strong> recognized
+                </div>
+                <small class="text-muted">${new Date(data.timestamp).toLocaleTimeString()}</small>
+            </div>
+        `;
+        
+        logsContainer.insertBefore(logEntry, logsContainer.firstChild);
+        
+        // Keep only last 50 logs
+        const logs = logsContainer.querySelectorAll('.alert');
+        if (logs.length > 50) {
+            logs[logs.length - 1].remove();
+        }
+    }
+    
+    addAttendanceLog(data) {
+        const recognitionsContainer = document.getElementById('recentRecognitions');
+        const recognitionEntry = document.createElement('div');
+        recognitionEntry.className = 'alert alert-success alert-sm mb-2';
+        recognitionEntry.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="bi bi-person-check me-2"></i>
+                    <strong>${data.student_name}</strong>
+                    <br><small>${data.student_roll}</small>
+                </div>
+                <div class="text-end">
+                    <span class="badge bg-success">${(data.confidence_score * 100).toFixed(1)}%</span>
+                    <br><small class="text-muted">${new Date(data.timestamp).toLocaleTimeString()}</small>
+                </div>
+            </div>
+        `;
+        
+        recognitionsContainer.insertBefore(recognitionEntry, recognitionsContainer.firstChild);
+        
+        // Keep only last 20 recognitions
+        const recognitions = recognitionsContainer.querySelectorAll('.alert');
+        if (recognitions.length > 20) {
+            recognitions[recognitions.length - 1].remove();
+        }
+    }
+    
+    showConnectionStatus(message, type) {
+        const statusElement = document.getElementById('connectionStatus');
+        const messageElement = document.getElementById('connectionMessage');
+        
+        messageElement.textContent = message;
+        messageElement.className = `toast-body text-${type}`;
+        
+        const toast = new bootstrap.Toast(statusElement);
+        toast.show();
+    }
+    
+    startDetection() {
+        document.getElementById('startDetection').style.display = 'none';
+        document.getElementById('stopDetection').style.display = 'inline-block';
+        
+        // Update camera feed statuses
+        document.querySelectorAll('.camera-feed .badge.bg-secondary').forEach(badge => {
+            badge.textContent = 'Status: Active';
+            badge.className = 'badge bg-success';
+        });
+        
+        this.showConnectionStatus('Detection started', 'success');
+    }
+    
+    stopDetection() {
+        document.getElementById('startDetection').style.display = 'inline-block';
+        document.getElementById('stopDetection').style.display = 'none';
+        
+        // Update camera feed statuses
+        document.querySelectorAll('.camera-feed .badge.bg-success').forEach(badge => {
+            badge.textContent = 'Status: Inactive';
+            badge.className = 'badge bg-secondary';
+        });
+        
+        this.showConnectionStatus('Detection stopped', 'warning');
+    }
+}
+
+// Initialize detection monitor when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    window.detectionMonitor = new DetectionMonitor();
+});
+</script>
+{% endblock %}
