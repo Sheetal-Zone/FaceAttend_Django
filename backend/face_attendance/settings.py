@@ -122,7 +122,7 @@ CHANNEL_LAYERS = {
 
 # Face Recognition Settings
 FACE_RECOGNITION_TOLERANCE = 0.6
-YOLO_MODEL_PATH = 'yolov11n.pt'
+YOLO_MODEL_PATH = 'models/yolov8n.pt'
 # Camera settings will be configured per camera stream in the database
 
 # Logging

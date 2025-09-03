@@ -364,6 +364,68 @@ def camera_toggle(request, camera_id):
     return JsonResponse({'success': False, 'message': 'Invalid request method.'})
 
 @login_required
+def laptop_camera_management(request):
+    """Manage laptop camera for attendance"""
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'start':
+            try:
+                # Start laptop camera detection via FastAPI
+                import requests
+                response = requests.post(
+                    'http://localhost:8001/api/v1/detection/laptop-camera/start',
+                    json={'camera_index': 0},
+                    headers={'Authorization': f'Bearer {request.session.get("access_token", "")}'}
+                )
+                
+                if response.status_code == 200:
+                    messages.success(request, 'Laptop camera detection started successfully.')
+                else:
+                    messages.error(request, f'Failed to start laptop camera: {response.text}')
+                    
+            except Exception as e:
+                messages.error(request, f'Error starting laptop camera: {str(e)}')
+                
+        elif action == 'stop':
+            try:
+                # Stop laptop camera detection via FastAPI
+                import requests
+                response = requests.post(
+                    'http://localhost:8001/api/v1/detection/laptop-camera/stop',
+                    json={'camera_index': 0},
+                    headers={'Authorization': f'Bearer {request.session.get("access_token", "")}'}
+                )
+                
+                if response.status_code == 200:
+                    messages.success(request, 'Laptop camera detection stopped successfully.')
+                else:
+                    messages.error(request, f'Failed to stop laptop camera: {response.text}')
+                    
+            except Exception as e:
+                messages.error(request, f'Error stopping laptop camera: {str(e)}')
+    
+    # Get laptop camera status
+    laptop_camera_status = None
+    try:
+        import requests
+        response = requests.get(
+            'http://localhost:8001/api/v1/detection/laptop-camera/status',
+            headers={'Authorization': f'Bearer {request.session.get("access_token", "")}'}
+        )
+        
+        if response.status_code == 200:
+            laptop_camera_status = response.json().get('data', {})
+    except:
+        pass
+    
+    context = {
+        'laptop_camera_status': laptop_camera_status,
+    }
+    
+    return render(request, 'attendance/laptop_camera_management.html', context)
+
+@login_required
 def live_detection(request):
     cameras = CameraStream.objects.filter(is_active=True)
     webcam_config = WebcamConfiguration.objects.first()
@@ -374,48 +436,6 @@ def live_detection(request):
     }
     
     return render(request, 'attendance/live_detection.html', context)
-
-@login_required
-def webcam_view(request):
-    if request.method == 'POST':
-        try:
-            # Handle webcam-based attendance marking
-            student_id = request.POST.get('student_id')
-            confidence_score = request.POST.get('confidence_score', 0.0)
-            
-            student = get_object_or_404(Student, id=student_id)
-            
-            # Mark attendance
-            attendance = Attendance.mark_attendance(
-                student=student,
-                status='Present',
-                confidence_score=confidence_score,
-                camera_location='Webcam',
-                camera_type='WEBCAM'
-            )
-            
-            # Create detection log
-            DetectionLog.objects.create(
-                camera_type='WEBCAM',
-                faces_detected=1,
-                students_recognized=1,
-                confidence_scores=[confidence_score]
-            )
-            
-            return JsonResponse({
-                'success': True,
-                'message': f'Attendance marked for {student.name}',
-                'student_name': student.name,
-                'roll_number': student.roll_number
-            })
-            
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'message': str(e)
-            })
-    
-    return render(request, 'attendance/webcam_view.html')
 
 @csrf_exempt
 @require_http_methods(["POST"])

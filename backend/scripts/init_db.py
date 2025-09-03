@@ -1,118 +1,69 @@
 #!/usr/bin/env python3
 """
-FastAPI Database Initialization Script
-This script initializes the database for the FastAPI Face Attendance System.
+Database Initialization Script for FastAPI
+Creates all necessary tables and initializes the database
 """
 
-import os
 import sys
+import os
 from pathlib import Path
 
-# Add the project root to Python path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+# Add the parent directory to the Python path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.database import create_tables, SessionLocal
-from app.auth import init_admin_password
-from app.models import Student, Attendance, DetectionLog, LivenessDetectionSession
-from app.config import settings
+from app.database import create_tables, engine
+from app.models import Base, Student, LivenessDetectionSession, Attendance, DetectionLog
+from app.auth import create_admin_user
 import logging
 
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def setup_database():
-    """Set up the database with tables and initial data."""
-    print("🗄️  Setting up FastAPI Face Attendance System Database...")
-    
+def init_database():
+    """Initialize the database with all tables"""
     try:
-        # Create tables
-        print("📦 Creating database tables...")
+        logger.info("Initializing database...")
+        
+        # Create all tables
         create_tables()
-        print("✅ Database tables created successfully")
+        logger.info("Database tables created successfully")
         
-        # Initialize admin password
-        print("🔐 Initializing admin authentication...")
-        init_admin_password()
-        print("✅ Admin authentication initialized")
+        # Verify tables exist
+        from sqlalchemy import inspect
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        logger.info(f"Available tables: {tables}")
         
-        # Test database connection
-        print("🔍 Testing database connection...")
-        db = SessionLocal()
+        # Check if required tables exist
+        required_tables = ['students', 'liveness_detection_sessions', 'attendance', 'detection_logs']
+        missing_tables = [table for table in required_tables if table not in tables]
+        
+        if missing_tables:
+            logger.error(f"Missing required tables: {missing_tables}")
+            return False
+        
+        logger.info("All required tables are present")
+        
+        # Create admin user if it doesn't exist
         try:
-            # Test query
-            student_count = db.query(Student).count()
-            attendance_count = db.query(Attendance).count()
-            log_count = db.query(DetectionLog).count()
-            liveness_session_count = db.query(LivenessDetectionSession).count()
-            
-            print(f"✅ Database connection successful")
-            print(f"   - Students: {student_count}")
-            print(f"   - Attendance records: {attendance_count}")
-            print(f"   - Detection logs: {log_count}")
-            print(f"   - Liveness detection sessions: {liveness_session_count}")
-            
-        finally:
-            db.close()
+            create_admin_user()
+            logger.info("Admin user created/verified")
+        except Exception as e:
+            logger.warning(f"Admin user creation failed: {e}")
         
-        print("🎉 Database setup completed successfully!")
-        print("\n📋 Next steps:")
-        print("   1. Start the FastAPI server: uvicorn main:app --reload")
-        print("   2. Access API docs: http://localhost:8000/docs")
-        print("   3. Login with: admin / admin123")
+        logger.info("Database initialization completed successfully!")
+        return True
         
     except Exception as e:
-        logger.error(f"❌ Error setting up database: {e}")
-        print(f"❌ Error setting up database: {e}")
-        sys.exit(1)
-
-def create_sample_data():
-    """Create sample data for testing."""
-    print("📝 Creating sample data...")
-    
-    try:
-        db = SessionLocal()
-        
-        # Check if sample data already exists
-        if db.query(Student).count() > 0:
-            print("ℹ️  Sample data already exists, skipping...")
-            return
-        
-        # Create sample students (without photo_url since it's removed)
-        sample_students = [
-            {
-                "name": "John Doe",
-                "roll_number": "CS001"
-            },
-            {
-                "name": "Jane Smith",
-                "roll_number": "CS002"
-            },
-            {
-                "name": "Mike Johnson",
-                "roll_number": "CS003"
-            }
-        ]
-        
-        for student_data in sample_students:
-            student = Student(**student_data)
-            db.add(student)
-        
-        db.commit()
-        print(f"✅ Created {len(sample_students)} sample students")
-        
-    except Exception as e:
-        logger.error(f"Error creating sample data: {e}")
-        print(f"❌ Error creating sample data: {e}")
-    finally:
-        db.close()
+        logger.error(f"Database initialization failed: {e}")
+        return False
 
 if __name__ == "__main__":
-    setup_database()
-    
-    # Ask if user wants sample data
-    response = input("\n🤔 Would you like to create sample data? (y/n): ")
-    if response.lower() in ['y', 'yes']:
-        create_sample_data()
-    
-    print("\n✨ Setup complete! Happy coding! 🚀")
+    success = init_database()
+    if success:
+        print("✅ Database initialized successfully!")
+        sys.exit(0)
+    else:
+        print("❌ Database initialization failed!")
+        sys.exit(1)

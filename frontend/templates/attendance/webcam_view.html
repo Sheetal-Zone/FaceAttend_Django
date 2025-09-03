@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Webcam Attendance - Face Attendance System{% endblock %}
+{% block title %}Camera Attendance - Face Attendance System{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -8,7 +8,7 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h1 class="h3 mb-0">
-                    <i class="fas fa-camera"></i> Webcam Attendance
+                    <i class="fas fa-camera"></i> Camera Attendance
                 </h1>
                 <a href="{% url 'attendance:dashboard' %}" class="btn btn-secondary">
                     <i class="fas fa-arrow-left"></i> Back to Dashboard
@@ -18,31 +18,31 @@
     </div>
 
     <div class="row">
-        <!-- Webcam Preview -->
+        <!-- Camera Preview -->
         <div class="col-lg-8">
             <div class="card">
                 <div class="card-header">
                     <h5 class="card-title mb-0">
-                        <i class="fas fa-video"></i> Live Webcam Feed
+                        <i class="fas fa-video"></i> Live Camera Feed
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="webcam-container">
-                        <video id="webcamVideo" autoplay muted playsinline class="w-100" style="max-height: 500px; border-radius: 8px;"></video>
-                        <canvas id="webcamCanvas" style="display: none;"></canvas>
+                    <div class="camera-container">
+                        <video id="cameraVideo" autoplay muted playsinline class="w-100" style="max-height: 500px; border-radius: 8px;"></video>
+                        <canvas id="cameraCanvas" style="display: none;"></canvas>
                     </div>
                     
-                    <div class="webcam-controls mt-3">
-                        <button id="startWebcamBtn" class="btn btn-success me-2">
-                            <i class="fas fa-play"></i> Start Webcam
+                    <div class="camera-controls mt-3">
+                        <button id="startCameraBtn" class="btn btn-success me-2">
+                            <i class="fas fa-play"></i> Start Camera
                         </button>
-                        <button id="stopWebcamBtn" class="btn btn-danger me-2" style="display: none;">
-                            <i class="fas fa-stop"></i> Stop Webcam
+                        <button id="stopCameraBtn" class="btn btn-danger me-2" style="display: none;">
+                            <i class="fas fa-stop"></i> Stop Camera
                         </button>
                         <button id="captureBtn" class="btn btn-primary me-2" style="display: none;">
                             <i class="fas fa-camera"></i> Capture & Detect
                         </button>
-                        <span id="webcamStatus" class="badge bg-secondary">Webcam not started</span>
+                        <span id="cameraStatus" class="badge bg-secondary">Camera not started</span>
                     </div>
                     
                     <div id="detectionResults" class="mt-3" style="display: none;">
@@ -57,49 +57,55 @@
 
         <!-- Configuration and Status -->
         <div class="col-lg-4">
-            <!-- Webcam Configuration -->
+            <!-- Camera Configuration -->
             <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="card-title mb-0">
-                        <i class="fas fa-cog"></i> Webcam Configuration
+                        <i class="fas fa-cog"></i> Camera Configuration
                     </h5>
                 </div>
                 <div class="card-body">
-                    {% if webcam_config %}
-                        <div class="mb-3">
-                            <label class="form-label">Device ID:</label>
-                            <input type="number" id="deviceId" class="form-control" value="{{ webcam_config.device_id }}" min="0">
+                    <div class="mb-3">
+                        <label class="form-label">Camera Device:</label>
+                        <select id="cameraDevice" class="form-select">
+                            <option value="">Auto-detect available camera</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Resolution:</label>
+                        <select id="resolution" class="form-select">
+                            <option value="640,480">640x480</option>
+                            <option value="1280,720" selected>1280x720 (HD)</option>
+                            <option value="1920,1080">1920x1080 (Full HD)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Confidence Threshold:</label>
+                        <input type="range" id="confidenceThreshold" class="form-range" min="0.1" max="1.0" step="0.1" value="0.7">
+                        <div class="text-center">
+                            <span id="confidenceValue">0.7</span>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Resolution:</label>
-                            <select id="resolution" class="form-select">
-                                <option value="640,480" {% if webcam_config.resolution_width == 640 and webcam_config.resolution_height == 480 %}selected{% endif %}>640x480</option>
-                                <option value="1280,720" {% if webcam_config.resolution_width == 1280 and webcam_config.resolution_height == 720 %}selected{% endif %}>1280x720 (HD)</option>
-                                <option value="1920,1080" {% if webcam_config.resolution_width == 1920 and webcam_config.resolution_height == 1080 %}selected{% endif %}>1920x1080 (Full HD)</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">FPS:</label>
-                            <input type="number" id="fps" class="form-control" value="{{ webcam_config.fps }}" min="1" max="60">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Confidence Threshold:</label>
-                            <input type="range" id="confidenceThreshold" class="form-range" min="0.1" max="1.0" step="0.1" value="{{ webcam_config.confidence_threshold }}">
-                            <div class="text-center">
-                                <span id="confidenceValue">{{ webcam_config.confidence_threshold }}</span>
-                            </div>
-                        </div>
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="autoMarkAttendance" {% if webcam_config.attendance_auto_mark %}checked{% endif %}>
-                            <label class="form-check-label" for="autoMarkAttendance">
-                                Auto-mark attendance when face is recognized
-                            </label>
-                        </div>
-                    {% else %}
-                        <div class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle"></i> No webcam configuration found. Please configure webcam settings in the admin panel.
-                        </div>
-                    {% endif %}
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="autoMarkAttendance" checked>
+                        <label class="form-check-label" for="autoMarkAttendance">
+                            Auto-mark attendance when face is recognized
+                        </label>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <small>
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Camera Features:</strong><br>
+                            • Automatic camera detection<br>
+                            • Real-time face detection<br>
+                            • Student recognition<br>
+                            • Automatic attendance marking
+                        </small>
+                    </div>
                 </div>
             </div>
 
@@ -153,15 +159,16 @@
 </div>
 
 <script>
-let webcamStream = null;
+let cameraStream = null;
 let videoElement = null;
 let canvasElement = null;
 let currentStudent = null;
 let currentConfidence = 0;
+let availableCameras = [];
 
 document.addEventListener('DOMContentLoaded', function() {
-    videoElement = document.getElementById('webcamVideo');
-    canvasElement = document.getElementById('webcamCanvas');
+    videoElement = document.getElementById('cameraVideo');
+    canvasElement = document.getElementById('cameraCanvas');
     
     // Initialize controls
     initializeControls();
@@ -173,69 +180,127 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('confidenceThreshold').addEventListener('input', function() {
         document.getElementById('confidenceValue').textContent = this.value;
     });
+    
+    // Detect available cameras
+    detectAvailableCameras();
 });
 
+function detectAvailableCameras() {
+    // Get available camera devices
+    navigator.mediaDevices.enumerateDevices()
+        .then(devices => {
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+            availableCameras = videoDevices;
+            
+            const cameraSelect = document.getElementById('cameraDevice');
+            cameraSelect.innerHTML = '<option value="">Auto-detect available camera</option>';
+            
+            videoDevices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = device.label || `Camera ${index + 1}`;
+                cameraSelect.appendChild(option);
+            });
+            
+            console.log('Available cameras:', availableCameras);
+        })
+        .catch(error => {
+            console.error('Error detecting cameras:', error);
+        });
+}
+
 function initializeControls() {
-    document.getElementById('startWebcamBtn').addEventListener('click', startWebcam);
-    document.getElementById('stopWebcamBtn').addEventListener('click', stopWebcam);
+    // Camera functions
+    async function startCamera() {
+        try {
+            const deviceId = document.getElementById('cameraDevice').value;
+            const resolution = document.getElementById('resolution').value.split(',');
+            
+            const constraints = {
+                video: {
+                    width: { ideal: parseInt(resolution[0]) },
+                    height: { ideal: parseInt(resolution[1]) }
+                }
+            };
+            
+            // If specific camera is selected, use it
+            if (deviceId !== '') {
+                constraints.video.deviceId = { exact: availableCameras[deviceId].deviceId };
+            }
+            
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            cameraStream = stream;
+            videoElement.srcObject = stream;
+            
+            // Update UI
+            document.getElementById('startCameraBtn').style.display = 'none';
+            document.getElementById('stopCameraBtn').style.display = 'inline-block';
+            document.getElementById('captureBtn').style.display = 'inline-block';
+            document.getElementById('cameraStatus').textContent = 'Camera active';
+            document.getElementById('cameraStatus').className = 'badge bg-success';
+            
+            showAlert('Camera started successfully!', 'success');
+            
+            // Start FastAPI camera processor
+            startCameraProcessor();
+            
+        } catch (error) {
+            console.error('Error starting camera:', error);
+            showAlert('Failed to start camera: ' + error.message, 'danger');
+        }
+    }
+
+    function stopCamera() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+        
+        if (videoElement) {
+            videoElement.srcObject = null;
+        }
+        
+        // Update UI
+        document.getElementById('startCameraBtn').style.display = 'inline-block';
+        document.getElementById('stopCameraBtn').style.display = 'none';
+        document.getElementById('captureBtn').style.display = 'none';
+        document.getElementById('cameraStatus').textContent = 'Camera stopped';
+        document.getElementById('cameraStatus').className = 'badge bg-secondary';
+        
+        showAlert('Camera stopped successfully!', 'success');
+    }
+
+    // Event listeners for camera buttons
+    document.getElementById('startCameraBtn').addEventListener('click', startCamera);
+    document.getElementById('stopCameraBtn').addEventListener('click', stopCamera);
     document.getElementById('captureBtn').addEventListener('click', captureAndDetect);
     document.getElementById('markAttendanceBtn').addEventListener('click', markAttendance);
 }
 
-async function startWebcam() {
+async function startCameraProcessor() {
     try {
-        const deviceId = parseInt(document.getElementById('deviceId').value) || 0;
-        const resolution = document.getElementById('resolution').value.split(',');
-        const fps = parseInt(document.getElementById('fps').value) || 30;
-        
-        const constraints = {
-            video: {
-                deviceId: deviceId ? { exact: deviceId } : undefined,
-                width: { ideal: parseInt(resolution[0]) },
-                height: { ideal: parseInt(resolution[1]) },
-                frameRate: { ideal: fps }
+        // Start FastAPI camera processor (laptop camera endpoint works for any camera)
+        const response = await fetch('/api/v1/detection/laptop-camera/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAccessToken()}`
             }
-        };
+        });
         
-        webcamStream = await navigator.mediaDevices.getUserMedia(constraints);
-        videoElement.srcObject = webcamStream;
-        
-        // Update UI
-        document.getElementById('startWebcamBtn').style.display = 'none';
-        document.getElementById('stopWebcamBtn').style.display = 'inline-block';
-        document.getElementById('captureBtn').style.display = 'inline-block';
-        document.getElementById('webcamStatus').textContent = 'Webcam active';
-        document.getElementById('webcamStatus').className = 'badge bg-success';
-        
-        showMessage('Webcam started successfully!', 'success');
-        
+        if (response.ok) {
+            console.log('Camera processor started successfully');
+        } else {
+            console.warn('Failed to start camera processor, but camera is working');
+        }
     } catch (error) {
-        console.error('Error accessing webcam:', error);
-        showMessage('Error accessing webcam. Please check permissions.', 'error');
-    }
-}
-
-function stopWebcam() {
-    if (webcamStream) {
-        webcamStream.getTracks().forEach(track => track.stop());
-        webcamStream = null;
-        videoElement.srcObject = null;
-        
-        // Update UI
-        document.getElementById('startWebcamBtn').style.display = 'inline-block';
-        document.getElementById('stopWebcamBtn').style.display = 'none';
-        document.getElementById('captureBtn').style.display = 'none';
-        document.getElementById('webcamStatus').textContent = 'Webcam stopped';
-        document.getElementById('webcamStatus').className = 'badge bg-secondary';
-        document.getElementById('detectionResults').style.display = 'none';
-        
-        showMessage('Webcam stopped.', 'warning');
+        console.warn('Camera processor not available, but camera is working:', error);
     }
 }
 
 function captureAndDetect() {
-    if (!webcamStream) {
-        showMessage('Please start the webcam first.', 'warning');
+    if (!cameraStream) {
+        showMessage('Please start the camera first.', 'warning');
         return;
     }
     
@@ -308,7 +373,7 @@ function markAttendance() {
         body: JSON.stringify({
             student_id: currentStudent.id,
             confidence_score: currentConfidence,
-            camera_location: 'Laptop Webcam',
+            camera_location: 'Camera',
             processing_time: 0.1,
             frame_resolution: '1280x720'
         })
@@ -347,7 +412,7 @@ function loadRecentAttendance() {
                 </div>
                 <div class="col-6">
                     <div class="border rounded p-2">
-                        <h6 class="mb-1">Webcam</h6>
+                        <h6 class="mb-1">Camera</h6>
                         <h4 class="text-success mb-0">${data.webcam_attendance}</h4>
                     </div>
                 </div>
@@ -378,6 +443,32 @@ function showMessage(message, type) {
     }, 5000);
 }
 
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.container-fluid');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Helper function to get access token (placeholder)
+function getAccessToken() {
+    // This should be implemented to get the actual token from Django session
+    // For now, return empty string (will cause 403 errors until implemented)
+    return '';
+}
+
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -395,20 +486,20 @@ function getCookie(name) {
 </script>
 
 <style>
-.webcam-container {
+.camera-container {
     position: relative;
     background: #000;
     border-radius: 8px;
     overflow: hidden;
 }
 
-.webcam-container video {
+.camera-container video {
     display: block;
     width: 100%;
     height: auto;
 }
 
-.webcam-controls {
+.camera-controls {
     text-align: center;
 }
 

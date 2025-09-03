@@ -197,6 +197,192 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+# Laptop Camera Endpoints
+@router.post("/laptop-camera/start", response_model=APIResponse)
+async def start_laptop_camera_detection(
+    camera_index: int = 0,
+    current_admin: str = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Start real-time face detection from laptop camera"""
+    try:
+        # Initialize AI models if not already done
+        if not face_recognition_system.initialized:
+            face_recognition_system.initialize_models()
+            
+            # Load known faces
+            students = db.query(Student).all()
+            students_data = []
+            for student in students:
+                if student.embedding_vector:
+                    students_data.append({
+                        'id': student.id,
+                        'embedding_vector': student.embedding_vector
+                    })
+            face_recognition_system.load_known_faces(students_data)
+        
+        # Import here to avoid circular imports
+        from app.camera_processor import LaptopCameraProcessor
+        
+        # Create and start laptop camera processor
+        laptop_processor = LaptopCameraProcessor(camera_index=camera_index)
+        laptop_processor.start()
+        
+        # Store processor reference (you might want to add this to camera_manager)
+        # For now, we'll store it in a simple way
+        if not hasattr(router, 'laptop_processors'):
+            router.laptop_processors = {}
+        
+        router.laptop_processors[camera_index] = laptop_processor
+        
+        return {
+            "success": True,
+            "message": f"Laptop camera detection started for camera index: {camera_index}",
+            "data": {
+                "camera_index": camera_index,
+                "camera_location": "Laptop Camera",
+                "available_cameras": laptop_processor.available_cameras
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error starting laptop camera detection: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error starting laptop camera detection: {str(e)}"
+        )
+
+
+@router.post("/laptop-camera/stop", response_model=APIResponse)
+async def stop_laptop_camera_detection(
+    camera_index: int = 0,
+    current_admin: str = Depends(get_current_admin)
+):
+    """Stop laptop camera detection for a specific camera index"""
+    try:
+        if hasattr(router, 'laptop_processors') and camera_index in router.laptop_processors:
+            processor = router.laptop_processors[camera_index]
+            processor.stop()
+            del router.laptop_processors[camera_index]
+            
+            return {
+                "success": True,
+                "message": f"Laptop camera detection stopped for camera index: {camera_index}"
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No laptop camera processor found for index: {camera_index}"
+            )
+        
+    except Exception as e:
+        logger.error(f"Error stopping laptop camera detection: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error stopping laptop camera detection: {str(e)}"
+        )
+
+
+@router.get("/laptop-camera/info", response_model=APIResponse)
+async def get_laptop_camera_info(
+    current_admin: str = Depends(get_current_admin)
+):
+    """Get information about available laptop cameras"""
+    try:
+        from app.camera_processor import LaptopCameraProcessor
+        
+        # Create a temporary processor to get camera info
+        temp_processor = LaptopCameraProcessor()
+        camera_info = temp_processor.get_camera_info()
+        
+        return {
+            "success": True,
+            "message": "Laptop camera information retrieved",
+            "data": camera_info
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting laptop camera info: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting laptop camera info: {str(e)}"
+        )
+
+
+@router.post("/laptop-camera/switch", response_model=APIResponse)
+async def switch_laptop_camera(
+    camera_index: int,
+    current_admin: str = Depends(get_current_admin)
+):
+    """Switch to a different laptop camera index"""
+    try:
+        if hasattr(router, 'laptop_processors'):
+            # Find any running processor
+            for idx, processor in router.laptop_processors.items():
+                if processor.is_running:
+                    if processor.switch_camera(camera_index):
+                        # Update the stored processor
+                        router.laptop_processors[camera_index] = processor
+                        if idx != camera_index:
+                            del router.laptop_processors[idx]
+                        
+                        return {
+                            "success": True,
+                            "message": f"Switched to laptop camera index: {camera_index}",
+                            "data": {
+                                "camera_index": camera_index,
+                                "camera_location": "Laptop Camera"
+                            }
+                        }
+                    else:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Failed to switch to camera index: {camera_index}"
+                        )
+            
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No running laptop camera processor found"
+            )
+        
+    except Exception as e:
+        logger.error(f"Error switching laptop camera: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error switching laptop camera: {str(e)}"
+        )
+
+
+@router.get("/laptop-camera/status", response_model=APIResponse)
+async def get_laptop_camera_status(
+    current_admin: str = Depends(get_current_admin)
+):
+    """Get status of all laptop camera processors"""
+    try:
+        status_data = {}
+        
+        if hasattr(router, 'laptop_processors'):
+            for idx, processor in router.laptop_processors.items():
+                status_data[idx] = {
+                    "running": processor.is_running,
+                    "camera_location": processor.camera_location,
+                    "frame_count": processor.frame_count
+                }
+        
+        return {
+            "success": True,
+            "message": "Laptop camera status retrieved",
+            "data": status_data
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting laptop camera status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting laptop camera status: {str(e)}"
+        )
+
+
 @router.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: int):
     """WebSocket endpoint for real-time detection updates"""

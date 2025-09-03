@@ -29,7 +29,6 @@ urlpatterns = [
     
     # Detection and recognition
     path('live-detection/', views.live_detection, name='live_detection'),
-    path('webcam/', views.webcam_view, name='webcam_view'),
     path('detection-logs/', views.detection_logs, name='detection_logs'),
     
     # Detection control

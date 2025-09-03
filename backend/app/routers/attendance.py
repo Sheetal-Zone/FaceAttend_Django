@@ -78,6 +78,78 @@ async def get_attendance(
         )
 
 
+@router.post("/mark", response_model=APIResponse)
+async def mark_attendance(
+    student_id: int,
+    confidence_score: Optional[float] = None,
+    camera_location: Optional[str] = None,
+    current_admin: str = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Mark attendance for a student. Prevent duplicate entries per day."""
+    try:
+        logger.info(f"Marking attendance for student_id={student_id} by user '{current_admin}'")
+
+        student = db.query(Student).filter(Student.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
+        # Prevent duplicate attendance for the same student on the same day
+        today = date.today()
+        existing = (
+            db.query(Attendance)
+            .filter(
+                Attendance.student_id == student_id,
+                func.date(Attendance.timestamp) == today,
+            )
+            .first()
+        )
+        if existing:
+            logger.info(f"Attendance already marked today for student_id={student_id}")
+            return {
+                "success": True,
+                "message": "Attendance already marked today",
+                "data": {
+                    "attendance_id": existing.id,
+                    "student_id": existing.student_id,
+                    "timestamp": existing.timestamp,
+                    "status": existing.status,
+                },
+            }
+
+        # Create new attendance record
+        record = Attendance(
+            student_id=student_id,
+            timestamp=datetime.utcnow(),
+            status="Present",
+            confidence_score=confidence_score,
+            camera_location=camera_location,
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        logger.info(f"Attendance marked: id={record.id} student={student_id}")
+
+        return {
+            "success": True,
+            "message": f"Attendance marked for {student.name}",
+            "data": {
+                "attendance_id": record.id,
+                "student_id": record.student_id,
+                "timestamp": record.timestamp,
+                "status": record.status,
+            },
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error marking attendance: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error marking attendance: {str(e)}",
+        )
+
 @router.get("/{attendance_id}", response_model=AttendanceWithStudent)
 async def get_attendance_record(
     attendance_id: int,

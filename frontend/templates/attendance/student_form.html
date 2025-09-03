@@ -4,617 +4,1126 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>
-        <i class="bi bi-person-plus me-2"></i>
-        {% if student %}Edit Student{% else %}Add New Student{% endif %}
-    </h2>
-    <a href="{% url 'attendance:student_list' %}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left me-2"></i>Back to Students
-    </a>
+	<h2>
+		<i class="bi bi-person-plus me-2"></i>
+		{% if student %}Edit Student{% else %}Add New Student{% endif %}
+	</h2>
+	<a href="{% url 'attendance:student_list' %}" class="btn btn-outline-secondary">
+		<i class="bi bi-arrow-left me-2"></i>Back to Students
+	</a>
 </div>
 
 <div class="row">
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-body">
-                <form method="post" id="studentForm">
-                    {% csrf_token %}
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="name" class="form-label">Full Name *</label>
-                                <input type="text" class="form-control" id="name" name="name" value="{{ student.name|default:'' }}" required>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="roll_number" class="form-label">Roll Number *</label>
-                                <input type="text" class="form-control" id="roll_number" name="roll_number" value="{{ student.roll_number|default:'' }}" required>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="email" name="email" value="{{ student.email|default:'' }}">
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="phone_number" class="form-label">Phone Number</label>
-                                <input type="tel" class="form-control" id="phone_number" name="phone_number" value="{{ student.phone_number|default:'' }}">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="branch" class="form-label">Branch</label>
-                                <select class="form-select" id="branch" name="branch">
-                                    <option value="">Select Branch</option>
-                                    <option value="CSE" {% if student.branch == 'CSE' %}selected{% endif %}>Computer Science Engineering</option>
-                                    <option value="ECE" {% if student.branch == 'ECE' %}selected{% endif %}>Electronics & Communication Engineering</option>
-                                    <option value="ME" {% if student.branch == 'ME' %}selected{% endif %}>Mechanical Engineering</option>
-                                    <option value="CE" {% if student.branch == 'CE' %}selected{% endif %}>Civil Engineering</option>
-                                    <option value="IT" {% if student.branch == 'IT' %}selected{% endif %}>Information Technology</option>
-                                    <option value="EEE" {% if student.branch == 'EEE' %}selected{% endif %}>Electrical & Electronics Engineering</option>
-                                    <option value="AI" {% if student.branch == 'AI' %}selected{% endif %}>Artificial Intelligence</option>
-                                    <option value="DS" {% if student.branch == 'DS' %}selected{% endif %}>Data Science</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="year" class="form-label">Year</label>
-                                <select class="form-select" id="year" name="year">
-                                    <option value="">Select Year</option>
-                                    <option value="1" {% if student.year == 1 %}selected{% endif %}>1st Year</option>
-                                    <option value="2" {% if student.year == 2 %}selected{% endif %}>2nd Year</option>
-                                    <option value="3" {% if student.year == 3 %}selected{% endif %}>3rd Year</option>
-                                    <option value="4" {% if student.year == 4 %}selected{% endif %}>4th Year</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="section" class="form-label">Section</label>
-                                <select class="form-select" id="section" name="section">
-                                    <option value="">Select Section</option>
-                                    <option value="A" {% if student.section == 'A' %}selected{% endif %}>Section A</option>
-                                    <option value="B" {% if student.section == 'B' %}selected{% endif %}>Section B</option>
-                                    <option value="C" {% if student.section == 'C' %}selected{% endif %}>Section C</option>
-                                    <option value="D" {% if student.section == 'D' %}selected{% endif %}>Section D</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="placement_status" class="form-label">Placement Status</label>
-                                <select class="form-select" id="placement_status" name="placement_status">
-                                    <option value="Not Placed" {% if student.placement_status == 'Not Placed' or not student.placement_status %}selected{% endif %}>Not Placed</option>
-                                    <option value="Placed" {% if student.placement_status == 'Placed' %}selected{% endif %}>Placed</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="assessment_status" class="form-label">Assessment Status</label>
-                                <select class="form-select" id="assessment_status" name="assessment_status">
-                                    <option value="Not Assessed" {% if student.assessment_status == 'Not Assessed' or not student.assessment_status %}selected{% endif %}>Not Assessed</option>
-                                    <option value="Assessed" {% if student.assessment_status == 'Assessed' %}selected{% endif %}>Assessed</option>
-                                    <option value="Under Review" {% if student.assessment_status == 'Under Review' %}selected{% endif %}>Under Review</option>
-                                    <option value="Completed" {% if student.assessment_status == 'Completed' %}selected{% endif %}>Completed</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Liveness Detection Section -->
-                    <div class="card mt-4">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">
-                                <i class="bi bi-shield-check me-2"></i>Liveness Detection
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">Face Verification</label>
-                                        <div class="d-grid gap-2">
-                                            <button type="button" class="btn btn-primary" id="startLivenessBtn" onclick="startLivenessDetection()">
-                                                <i class="bi bi-camera me-2"></i>Start Liveness Detection
-                                            </button>
-                                            <button type="button" class="btn btn-outline-secondary" id="retryLivenessBtn" onclick="retryLivenessDetection()" style="display: none;">
-                                                <i class="bi bi-arrow-clockwise me-2"></i>Retry Liveness Detection
-                                            </button>
-                                        </div>
-                                        <small class="form-text text-muted">Complete liveness detection to verify student identity</small>
-                                    </div>
-                                    
-                                    <!-- Hidden fields for liveness data -->
-                                    <input type="hidden" id="face_embedding" name="face_embedding">
-                                    <input type="hidden" id="liveness_score" name="liveness_score">
-                                    <input type="hidden" id="face_image" name="face_image">
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="text-center">
-                                        <div id="livenessStatus" class="mb-3">
-                                            <div class="alert alert-info" id="livenessInfo">
-                                                <i class="bi bi-info-circle me-2"></i>
-                                                Click "Start Liveness Detection" to begin
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-4">
-                        <button type="submit" class="btn btn-primary me-2" id="submitBtn" disabled>
-                            <i class="bi bi-check-circle me-2"></i>
-                            {% if student %}Update Student{% else %}Add Student{% endif %}
-                        </button>
-                        <a href="{% url 'attendance:student_list' %}" class="btn btn-secondary">
-                            <i class="bi bi-x-circle me-2"></i>Cancel
-                        </a>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-info-circle me-2"></i>Liveness Detection Instructions
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <h6>Step-by-Step Process:</h6>
-                    <ol class="list-unstyled">
-                        <li class="mb-2">
-                            <span class="badge bg-primary me-2">1</span>
-                            <strong>Center Position:</strong> Face the camera directly
-                        </li>
-                        <li class="mb-2">
-                            <span class="badge bg-primary me-2">2</span>
-                            <strong>Turn Left:</strong> Slowly turn your head to the left
-                        </li>
-                        <li class="mb-2">
-                            <span class="badge bg-primary me-2">3</span>
-                            <strong>Turn Right:</strong> Slowly turn your head to the right
-                        </li>
-                    </ol>
-                </div>
-                
-                <div class="mb-3">
-                    <h6>Requirements:</h6>
-                    <ul class="list-unstyled">
-                        <li class="mb-1">
-                            <i class="bi bi-check-circle text-success me-2"></i>
-                            Good lighting conditions
-                        </li>
-                        <li class="mb-1">
-                            <i class="bi bi-check-circle text-success me-2"></i>
-                            Clear face visibility
-                        </li>
-                        <li class="mb-1">
-                            <i class="bi bi-check-circle text-success me-2"></i>
-                            Smooth head movements
-                        </li>
-                        <li class="mb-1">
-                            <i class="bi bi-exclamation-triangle text-warning me-2"></i>
-                            Only one person in frame
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
+	<div class="col-lg-8">
+		<div class="card">
+			<div class="card-body">
+				<form method="post" id="studentForm">
+					{% csrf_token %}
+					
+					<div class="row">
+						<div class="col-md-6">
+							<div class="mb-3">
+								<label for="name" class="form-label">Full Name *</label>
+								<input type="text" class="form-control" id="name" name="name" value="{{ student.name|default:'' }}" required>
+							</div>
+						</div>
+						<div class="col-md-6">
+							<div class="mb-3">
+								<label for="roll_number" class="form-label">Roll Number *</label>
+								<input type="text" class="form-control" id="roll_number" name="roll_number" value="{{ student.roll_number|default:'' }}" required>
+							</div>
+						</div>
+					</div>
+					
+					<div class="row">
+						<div class="col-md-6">
+							<div class="mb-3">
+								<label for="email" class="form-label">Email</label>
+								<input type="email" class="form-control" id="email" name="email" value="{{ student.email|default:'' }}">
+							</div>
+						</div>
+						<div class="col-md-6">
+							<div class="mb-3">
+								<label for="phone_number" class="form-label">Phone Number</label>
+								<input type="tel" class="form-control" id="phone_number" name="phone_number" value="{{ student.phone_number|default:'' }}">
+							</div>
+						</div>
+					</div>
+					
+					<div class="row">
+						<div class="col-md-4">
+							<div class="mb-3">
+								<label for="branch" class="form-label">Branch</label>
+								<select class="form-select" id="branch" name="branch">
+									<option value="">Select Branch</option>
+									<option value="CSE" {% if student.branch == 'CSE' %}selected{% endif %}>Computer Science Engineering</option>
+									<option value="ECE" {% if student.branch == 'ECE' %}selected{% endif %}>Electronics & Communication Engineering</option>
+									<option value="ME" {% if student.branch == 'ME' %}selected{% endif %}>Mechanical Engineering</option>
+									<option value="CE" {% if student.branch == 'CE' %}selected{% endif %}>Civil Engineering</option>
+									<option value="IT" {% if student.branch == 'IT' %}selected{% endif %}>Information Technology</option>
+									<option value="EEE" {% if student.branch == 'EEE' %}selected{% endif %}>Electrical & Electronics Engineering</option>
+									<option value="AI" {% if student.branch == 'AI' %}selected{% endif %}>Artificial Intelligence</option>
+									<option value="DS" {% if student.branch == 'DS' %}selected{% endif %}>Data Science</option>
+								</select>
+							</div>
+						</div>
+						<div class="col-md-4">
+							<div class="mb-3">
+								<label for="year" class="form-label">Year</label>
+								<select class="form-select" id="year" name="year">
+									<option value="">Select Year</option>
+									<option value="1" {% if student.year == 1 %}selected{% endif %}>1st Year</option>
+									<option value="2" {% if student.year == 2 %}selected{% endif %}>2nd Year</option>
+									<option value="3" {% if student.year == 3 %}selected{% endif %}>3rd Year</option>
+									<option value="4" {% if student.year == 4 %}selected{% endif %}>4th Year</option>
+								</select>
+							</div>
+						</div>
+						<div class="col-md-4">
+							<div class="mb-3">
+								<label for="section" class="form-label">Section</label>
+								<select class="form-select" id="section" name="section">
+									<option value="">Select Section</option>
+									<option value="A" {% if student.section == 'A' %}selected{% endif %}>Section A</option>
+									<option value="B" {% if student.section == 'B' %}selected{% endif %}>Section B</option>
+									<option value="C" {% if student.section == 'C' %}selected{% endif %}>Section C</option>
+									<option value="D" {% if student.section == 'D' %}selected{% endif %}>Section D</option>
+								</select>
+							</div>
+						</div>
+					</div>
+					
+					<div class="row">
+						<div class="col-md-6">
+							<div class="mb-3">
+								<label for="placement_status" class="form-label">Placement Status</label>
+								<select class="form-select" id="placement_status" name="placement_status">
+									<option value="Not Placed" {% if student.placement_status == 'Not Placed' or not student.placement_status %}selected{% endif %}>Not Placed</option>
+									<option value="Placed" {% if student.placement_status == 'Placed' %}selected{% endif %}>Placed</option>
+								</select>
+							</div>
+						</div>
+						<div class="col-md-6">
+							<div class="mb-3">
+								<label for="assessment_status" class="form-label">Assessment Status</label>
+								<select class="form-select" id="assessment_status" name="assessment_status">
+									<option value="Not Assessed" {% if student.assessment_status == 'Not Assessed' or not student.assessment_status %}selected{% endif %}>Not Assessed</option>
+									<option value="Assessed" {% if student.assessment_status == 'Assessed' %}selected{% endif %}>Assessed</option>
+									<option value="Under Review" {% if student.assessment_status == 'Under Review' %}selected{% endif %}>Under Review</option>
+									<option value="Completed" {% if student.assessment_status == 'Completed' %}selected{% endif %}>Completed</option>
+								</select>
+							</div>
+						</div>
+					</div>
+					
+					<!-- Liveness Detection Section -->
+					<div class="card mt-4">
+						<div class="card-header">
+							<h5 class="card-title mb-0">
+								<i class="bi bi-shield-check me-2"></i>Liveness Detection
+							</h5>
+						</div>
+						<div class="card-body">
+							<div class="row">
+								<div class="col-md-6">
+									<div class="mb-3">
+										<label class="form-label">Face Verification</label>
+										<div class="d-grid gap-2">
+											<button type="button" class="btn btn-primary" id="startLivenessBtn" onclick="startLivenessDetection()">
+												<i class="bi bi-shield-check me-2"></i>Start Liveness Detection
+											</button>
+											<button type="button" class="btn btn-outline-primary" id="startFaceCaptureBtn" onclick="startFaceCapture()">
+												<i class="bi bi-camera me-2"></i>Capture Face Photo
+											</button>
+											<button type="button" class="btn btn-outline-secondary" id="retryLivenessBtn" onclick="retryLivenessDetection()" style="display: none;">
+												<i class="bi bi-arrow-clockwise me-2"></i>Retry Liveness Detection
+											</button>
+										</div>
+										<small class="form-text text-muted">Choose liveness detection (recommended) or simple face capture</small>
+									</div>
+									
+									<!-- Hidden fields for liveness data -->
+									<input type="hidden" id="face_embedding" name="face_embedding">
+									<input type="hidden" id="liveness_score" name="liveness_score">
+									<input type="hidden" id="face_image" name="face_image">
+									{% if student %}
+									<input type="hidden" id="student_id" value="{{ student.id }}">
+									{% endif %}
+								</div>
+								<div class="col-md-6">
+									<div class="text-center">
+										<div id="livenessStatus" class="mb-3">
+											<div class="alert alert-info" id="livenessInfo">
+												<i class="bi bi-info-circle me-2"></i>
+												Click "Start Liveness Detection" to begin
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					
+					<div class="mt-4">
+						<button type="submit" class="btn btn-primary me-2" id="submitBtn" disabled>
+							<i class="bi bi-check-circle me-2"></i>
+							{% if student %}Update Student{% else %}Add Student{% endif %}
+						</button>
+						<a href="{% url 'attendance:student_list' %}" class="btn btn-secondary">
+							<i class="bi bi-x-circle me-2"></i>Cancel
+						</a>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+	
+	<div class="col-lg-4">
+		<div class="card">
+			<div class="card-header">
+				<h5 class="card-title mb-0">
+					<i class="bi bi-info-circle me-2"></i>Liveness Detection Instructions
+				</h5>
+			</div>
+			<div class="card-body">
+				<div class="mb-3">
+					<h6>Step-by-Step Process:</h6>
+					<ol class="list-unstyled">
+						<li class="mb-2">
+							<span class="badge bg-primary me-2">1</span>
+							<strong>Center Position:</strong> Face the camera directly
+						</li>
+						<li class="mb-2">
+							<span class="badge bg-primary me-2">2</span>
+							<strong>Turn Left:</strong> Slowly turn your head to the left
+						</li>
+						<li class="mb-2">
+							<span class="badge bg-primary me-2">3</span>
+							<strong>Turn Right:</strong> Slowly turn your head to the right
+						</li>
+					</ol>
+				</div>
+				
+				<div class="mb-3">
+					<h6>Requirements:</h6>
+					<ul class="list-unstyled">
+						<li class="mb-1">
+							<i class="bi bi-check-circle text-success me-2"></i>
+							Good lighting conditions
+						</li>
+						<li class="mb-1">
+							<i class="bi bi-check-circle text-success me-2"></i>
+							Clear face visibility
+						</li>
+						<li class="mb-1">
+							<i class="bi bi-check-circle text-success me-2"></i>
+							Smooth head movements
+						</li>
+						<li class="mb-1">
+							<i class="bi bi-exclamation-triangle text-warning me-2"></i>
+							Only one person in frame
+						</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+	</div>
 </div>
 
 <!-- Liveness Detection Modal -->
 <div class="modal fade" id="livenessModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="bi bi-shield-check me-2"></i>Liveness Detection
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="closeLivenessDetection()"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row">
-                    <div class="col-md-8">
-                        <div class="text-center">
-                            <video id="livenessVideo" autoplay muted style="max-width: 100%; height: auto; border-radius: 8px;"></video>
-                            <canvas id="livenessCanvas" style="display: none;"></canvas>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="liveness-instructions">
-                            <h6>Current Step:</h6>
-                            <div id="currentStep" class="alert alert-primary">
-                                <i class="bi bi-camera me-2"></i>
-                                <span id="stepText">Positioning camera...</span>
-                            </div>
-                            
-                            <div class="progress mb-3">
-                                <div class="progress-bar" id="livenessProgress" role="progressbar" style="width: 0%"></div>
-                            </div>
-                            
-                            <div class="step-indicators">
-                                <div class="step-item" id="stepCenter">
-                                    <i class="bi bi-circle me-2"></i>Center
-                                </div>
-                                <div class="step-item" id="stepLeft">
-                                    <i class="bi bi-circle me-2"></i>Left
-                                </div>
-                                <div class="step-item" id="stepRight">
-                                    <i class="bi bi-circle me-2"></i>Right
-                                </div>
-                            </div>
-                            
-                            <div class="mt-3">
-                                <button type="button" class="btn btn-success btn-sm" id="captureBtn" onclick="captureFrame()" style="display: none;">
-                                    <i class="bi bi-camera me-2"></i>Capture
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeLivenessDetection()">
-                    <i class="bi bi-x-circle me-2"></i>Cancel
-                </button>
-            </div>
-        </div>
-    </div>
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">
+					<i class="bi bi-shield-check me-2"></i>Liveness Detection
+				</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" onclick="closeLivenessDetection()"></button>
+			</div>
+			<div class="modal-body">
+				<div class="row">
+					<div class="col-md-8">
+						<div class="text-center">
+							<video id="livenessVideo" autoplay muted style="max-width: 100%; height: auto; border-radius: 8px;"></video>
+							<canvas id="livenessCanvas" style="display: none;"></canvas>
+						</div>
+					</div>
+					<div class="col-md-4">
+						<div class="liveness-instructions">
+							<h6>Current Step:</h6>
+							<div id="currentStep" class="alert alert-primary">
+								<i class="bi bi-camera me-2"></i>
+								<span id="stepText">Positioning camera...</span>
+							</div>
+							
+							<div class="progress mb-3">
+								<div class="progress-bar" id="livenessProgress" role="progressbar" style="width: 0%"></div>
+							</div>
+							
+							<div class="step-indicators">
+								<div class="step-item" id="stepCenter">
+									<i class="bi bi-circle me-2"></i>Center
+								</div>
+								<div class="step-item" id="stepLeft">
+									<i class="bi bi-circle me-2"></i>Left
+								</div>
+								<div class="step-item" id="stepRight">
+									<i class="bi bi-circle me-2"></i>Right
+								</div>
+							</div>
+							
+							<div class="mt-3">
+								<button type="button" class="btn btn-success btn-sm" id="captureBtn" onclick="captureFrame()" style="display: none;">
+									<i class="bi bi-camera me-2"></i>Capture
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" onclick="closeLivenessDetection()">
+					<i class="bi bi-x-circle me-2"></i>Cancel
+				</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Face Capture Modal -->
+<div class="modal fade" id="faceCaptureModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">
+					<i class="bi bi-camera me-2"></i>Face Capture
+				</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" onclick="closeFaceCapture()"></button>
+			</div>
+			<div class="modal-body">
+				<div class="row">
+					<div class="col-md-8">
+						<div class="text-center">
+							<video id="faceCaptureVideo" autoplay muted style="max-width: 100%; height: auto; border-radius: 8px;"></video>
+							<canvas id="faceCaptureCanvas" style="display: none;"></canvas>
+						</div>
+					</div>
+					<div class="col-md-4">
+						<div class="face-capture-instructions">
+							<h6>Instructions:</h6>
+							<div class="alert alert-info">
+								<i class="bi bi-info-circle me-2"></i>
+								<span>Position your face in the center of the frame and click "Capture Photo"</span>
+							</div>
+							
+							<div class="mt-3">
+								<button type="button" class="btn btn-success" id="capturePhotoBtn" onclick="captureFacePhoto()">
+									<i class="bi bi-camera me-2"></i>Capture Photo
+								</button>
+							</div>
+							
+							<div id="capturedImagePreview" class="mt-3" style="display: none;">
+								<h6>Captured Image:</h6>
+								<img id="previewImage" style="max-width: 100%; border-radius: 8px; border: 2px solid #28a745;">
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" onclick="closeFaceCapture()">
+					<i class="bi bi-x-circle me-2"></i>Cancel
+				</button>
+				<button type="button" class="btn btn-primary" id="confirmCaptureBtn" onclick="confirmFaceCapture()" style="display: none;">
+					<i class="bi bi-check-circle me-2"></i>Use This Photo
+				</button>
+			</div>
+		</div>
+	</div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 let stream = null;
+let manualStop = false;
 let currentSessionId = null;
 let currentStep = 'center';
 let capturedFrames = {};
+let lastFrameByStep = {};
 let livenessModal = null;
+let faceCaptureModal = null;
+let capturedFaceImage = null;
+let attendanceMarked = false;
+let frameProcessingActive = false;
+let stepTimeout = null;
+let retryCount = 0;
+const MAX_RETRIES = 3;
+const STEP_TIMEOUT = 3000; // 3 seconds per step
 
-// Initialize modal
-document.addEventListener('DOMContentLoaded', function() {
-    livenessModal = new bootstrap.Modal(document.getElementById('livenessModal'));
-});
-
-function startLivenessDetection() {
-    // Create liveness session
-    createLivenessSession().then(sessionId => {
-        if (sessionId) {
-            currentSessionId = sessionId;
-            startCamera();
-            livenessModal.show();
-            updateStep('center');
-        }
-    });
+// FastAPI base URL resolution
+let API_BASE = null;
+async function resolveApiBase() {
+	const candidates = [];
+	// FastAPI runs on port 8001, Django on port 8000
+	candidates.push('http://localhost:8001');
+	candidates.push('http://127.0.0.1:8001');
+	candidates.push('http://localhost:8000');
+	candidates.push('http://127.0.0.1:8000');
+	for (const base of candidates) {
+		try {
+			const res = await fetch(base + '/health', { method: 'GET' });
+			if (res.ok) {
+				API_BASE = base;
+				console.log('Resolved API base:', API_BASE);
+				return API_BASE;
+			}
+		} catch (e) {}
+	}
+	API_BASE = 'http://localhost:8001'; // Default to FastAPI port
+	console.warn('API not reachable. Using default:', API_BASE);
+	showAlert('API not reachable. Ensure FastAPI is running on port 8001.', 'warning');
+	return API_BASE;
 }
 
-function createLivenessSession() {
-    return fetch('/api/v1/liveness/session', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + getAuthToken()
-        },
-        body: JSON.stringify({})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            return data.data.session_id;
-        } else {
-            throw new Error(data.message || 'Failed to create liveness session');
-        }
-    })
-    .catch(error => {
-        console.error('Error creating liveness session:', error);
-        showAlert('Error creating liveness session: ' + error.message, 'danger');
-        return null;
-    });
+async function parseJsonSafe(response) {
+	const contentType = response.headers.get('content-type') || '';
+	if (contentType.includes('application/json')) {
+		return response.json();
+	}
+	const text = await response.text();
+	throw new Error('Expected JSON but received: ' + (text.slice(0, 120) || 'non-JSON response'));
 }
 
-function startCamera() {
-    navigator.mediaDevices.getUserMedia({ 
-        video: { 
-            width: { ideal: 1280 }, 
-            height: { ideal: 720 },
-            facingMode: 'user'
-        } 
-    })
-    .then(function(mediaStream) {
-        stream = mediaStream;
-        const video = document.getElementById('livenessVideo');
-        video.srcObject = stream;
-        
-        // Start frame processing
-        setTimeout(() => {
-            processFrame();
-        }, 2000);
-    })
-    .catch(function(err) {
-        console.error('Error accessing camera:', err);
-        showAlert('Unable to access camera. Please check permissions and try again.', 'danger');
-    });
-}
-
-function processFrame() {
-    if (!stream || !currentSessionId) return;
-    
-    const video = document.getElementById('livenessVideo');
-    const canvas = document.getElementById('livenessCanvas');
-    const context = canvas.getContext('2d');
-    
-    // Set canvas size to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    // Draw video frame to canvas
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Convert to base64
-    canvas.toBlob(function(blob) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const base64Data = e.target.result.split(',')[1];
-            sendFrameToServer(base64Data);
-        };
-        reader.readAsDataURL(blob);
-    }, 'image/jpeg', 0.9);
-}
-
-function sendFrameToServer(frameData) {
-    fetch('/api/v1/liveness/detect', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + getAuthToken()
-        },
-        body: JSON.stringify({
-            session_id: currentSessionId,
-            position: currentStep,
-            frame_data: frameData
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            capturedFrames[currentStep] = data;
-            markStepComplete(currentStep);
-            moveToNextStep();
-        } else {
-            console.error('Frame processing failed:', data.error);
-            // Retry after a short delay
-            setTimeout(processFrame, 1000);
-        }
-    })
-    .catch(error => {
-        console.error('Error sending frame:', error);
-        setTimeout(processFrame, 1000);
-    });
-}
-
-function moveToNextStep() {
-    const steps = ['center', 'left', 'right'];
-    const currentIndex = steps.indexOf(currentStep);
-    
-    if (currentIndex < steps.length - 1) {
-        currentStep = steps[currentIndex + 1];
-        updateStep(currentStep);
-        setTimeout(processFrame, 2000);
-    } else {
-        // All steps completed, verify liveness
-        verifyLivenessCompletion();
-    }
-}
-
-function updateStep(step) {
-    currentStep = step;
-    const stepText = document.getElementById('stepText');
-    const progressBar = document.getElementById('livenessProgress');
-    
-    switch(step) {
-        case 'center':
-            stepText.textContent = 'Please face the camera directly';
-            progressBar.style.width = '33%';
-            break;
-        case 'left':
-            stepText.textContent = 'Please turn your head to the left';
-            progressBar.style.width = '66%';
-            break;
-        case 'right':
-            stepText.textContent = 'Please turn your head to the right';
-            progressBar.style.width = '100%';
-            break;
-    }
-}
-
-function markStepComplete(step) {
-    const stepElement = document.getElementById('step' + step.charAt(0).toUpperCase() + step.slice(1));
-    stepElement.innerHTML = '<i class="bi bi-check-circle-fill text-success me-2"></i>' + step.charAt(0).toUpperCase() + step.slice(1);
-}
-
-function verifyLivenessCompletion() {
-    fetch('/api/v1/liveness/verify', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + getAuthToken()
-        },
-        body: JSON.stringify({
-            session_id: currentSessionId
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Liveness verification successful
-            document.getElementById('face_embedding').value = data.final_embedding;
-            document.getElementById('liveness_score').value = data.liveness_score;
-            
-            // Store the center frame as face image
-            if (capturedFrames.center && capturedFrames.center.frame_data) {
-                document.getElementById('face_image').value = capturedFrames.center.frame_data;
-            }
-            
-            showLivenessSuccess();
-            closeLivenessDetection();
-        } else {
-            showAlert('Liveness verification failed: ' + data.error, 'danger');
-            enableRetry();
-        }
-    })
-    .catch(error => {
-        console.error('Error verifying liveness:', error);
-        showAlert('Error verifying liveness: ' + error.message, 'danger');
-        enableRetry();
-    });
-}
-
-function showLivenessSuccess() {
-    const statusDiv = document.getElementById('livenessStatus');
-    statusDiv.innerHTML = `
-        <div class="alert alert-success">
-            <i class="bi bi-check-circle-fill me-2"></i>
-            Liveness detection completed successfully!
-        </div>
-    `;
-    
-    document.getElementById('submitBtn').disabled = false;
-    document.getElementById('startLivenessBtn').style.display = 'none';
-    document.getElementById('retryLivenessBtn').style.display = 'inline-block';
-}
-
-function enableRetry() {
-    document.getElementById('startLivenessBtn').style.display = 'none';
-    document.getElementById('retryLivenessBtn').style.display = 'inline-block';
-}
-
-function retryLivenessDetection() {
-    // Reset state
-    currentSessionId = null;
-    currentStep = 'center';
-    capturedFrames = {};
-    
-    // Reset UI
-    document.getElementById('livenessStatus').innerHTML = `
-        <div class="alert alert-info" id="livenessInfo">
-            <i class="bi bi-info-circle me-2"></i>
-            Click "Start Liveness Detection" to begin
-        </div>
-    `;
-    
-    document.getElementById('submitBtn').disabled = true;
-    document.getElementById('startLivenessBtn').style.display = 'inline-block';
-    document.getElementById('retryLivenessBtn').style.display = 'none';
-    
-    // Reset step indicators
-    ['Center', 'Left', 'Right'].forEach(step => {
-        const stepElement = document.getElementById('step' + step);
-        stepElement.innerHTML = '<i class="bi bi-circle me-2"></i>' + step;
-    });
-    
-    // Start new detection
-    startLivenessDetection();
-}
-
-function closeLivenessDetection() {
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        stream = null;
-    }
-    
-    if (livenessModal) {
-        livenessModal.hide();
-    }
-}
-
-function showAlert(message, type) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.querySelector('.card-body').insertBefore(alertDiv, document.querySelector('.card-body').firstChild);
-    
-    // Auto-dismiss after 5 seconds
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.remove();
-        }
-    }, 5000);
+function getAccessToken() {
+	try {
+		return localStorage.getItem('fastapi_access_token') || '';
+	} catch (e) {
+		return '';
+	}
 }
 
 function getAuthToken() {
-    // This should return the actual authentication token
-    // For now, we'll use a placeholder - implement proper auth token retrieval
-    return 'your-auth-token-here';
+	return getAccessToken();
 }
+
+function requireAuthOrRedirect() {
+	const token = getAccessToken();
+	if (!token) {
+		// Show authentication error instead of redirecting
+		showAuthError();
+		return false;
+	}
+	return true;
+}
+
+function showAuthError() {
+	const errorHtml = `
+		<div class="alert alert-warning alert-dismissible fade show" role="alert">
+			<i class="bi bi-exclamation-triangle me-2"></i>
+			<strong>Authentication Required:</strong> You need to obtain a FastAPI access token to use liveness detection.
+			<br><br>
+			<button type="button" class="btn btn-sm btn-primary me-2" onclick="getFastAPIToken()">
+				<i class="bi bi-key me-1"></i>Get Access Token
+			</button>
+			<button type="button" class="btn btn-sm btn-outline-secondary" onclick="this.parentElement.parentElement.remove()">
+				<i class="bi bi-x me-1"></i>Dismiss
+			</button>
+		</div>
+	`;
+	
+	// Insert at the top of the form
+	const form = document.getElementById('studentForm');
+	form.insertAdjacentHTML('afterbegin', errorHtml);
+}
+
+async function getFastAPIToken() {
+	try {
+		if (!API_BASE) {
+			await resolveApiBase();
+		}
+		const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				username: 'admin',
+				password: 'admin123'
+			})
+		});
+		
+		if (response.ok) {
+			const data = await response.json();
+			localStorage.setItem('fastapi_access_token', data.access_token);
+			showAlert('Access token obtained successfully! You can now use liveness detection.', 'success');
+			
+			// Remove the auth error message
+			const alert = document.querySelector('.alert-warning');
+			if (alert) alert.remove();
+		} else {
+			const txt = await response.text();
+			throw new Error('Failed to get access token: ' + txt);
+		}
+	} catch (error) {
+		console.error('Error getting FastAPI token:', error);
+		showAlert('Failed to get access token. FastAPI base: ' + (API_BASE || 'unknown') + '. ' + error.message, 'danger');
+	}
+}
+
+// Initialize modals
+document.addEventListener('DOMContentLoaded', async function() {
+	await resolveApiBase();
+	livenessModal = new bootstrap.Modal(document.getElementById('livenessModal'));
+	faceCaptureModal = new bootstrap.Modal(document.getElementById('faceCaptureModal'));
+	// Keep processing active when tab refocuses
+	document.addEventListener('visibilitychange', () => {
+		if (document.visibilityState === 'visible' && stream && currentSessionId) {
+			console.log('Tab visible; ensuring liveness loop continues');
+			setTimeout(processFrame, 500);
+		}
+	});
+});
+
+function startLivenessDetection() {
+	// Create liveness session
+	createLivenessSession().then(sessionId => {
+		if (sessionId) {
+			currentSessionId = sessionId;
+			attendanceMarked = false;
+			startCamera();
+			livenessModal.show();
+			updateStep('center');
+		}
+	});
+}
+
+function createLivenessSession() {
+	if (!requireAuthOrRedirect()) {
+		return Promise.resolve(null);
+	}
+	
+	console.log('Creating liveness session...');
+	let payload = {};
+	const studentIdEl = document.getElementById('student_id');
+	if (studentIdEl) {
+		payload.student_id = parseInt(studentIdEl.value, 10);
+	}
+	return fetch(`${API_BASE}/api/v1/liveness/session`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Accept': 'application/json',
+			'Authorization': 'Bearer ' + getAccessToken()
+		},
+		body: JSON.stringify(payload)
+	})
+	.then(async response => {
+		console.log('Liveness session response status:', response.status);
+		if (response.status === 401 || response.status === 403) {
+			localStorage.removeItem('fastapi_access_token');
+			showAuthError();
+			throw new Error('Unauthorized - please get a new access token');
+		}
+		return parseJsonSafe(response);
+	})
+	.then(data => {
+		console.log('Liveness session data:', data);
+		if (data.success) {
+			return data.data.session_id;
+		} else {
+			throw new Error(data.message || 'Failed to create liveness session');
+		}
+	})
+	.catch(error => {
+		console.error('Error creating liveness session:', error);
+		showAlert('Error creating liveness session: ' + error.message, 'danger');
+		return null;
+	});
+}
+
+function startCamera() {
+	console.log('Starting camera...');
+	navigator.mediaDevices.getUserMedia({ 
+		video: { 
+			width: { ideal: 1280 }, 
+			height: { ideal: 720 },
+			facingMode: 'user'
+		} 
+	})
+	.then(function(mediaStream) {
+		console.log('Camera stream obtained');
+		stream = mediaStream;
+		const video = document.getElementById('livenessVideo');
+		video.srcObject = stream;
+		console.log('Camera feed running');
+
+		// Add auto-reconnect on track end
+		stream.getVideoTracks().forEach(track => {
+			track.onended = () => {
+				console.warn('Video track ended, attempting to reconnect...');
+				if (!manualStop) {
+					attemptReconnect();
+				}
+			};
+		});
+		
+		// Wait for video to be ready
+		video.onloadedmetadata = function() {
+			console.log('Video metadata loaded, starting frame processing');
+			// Start frame processing after a short delay
+			setTimeout(() => {
+				processFrame();
+			}, 1000);
+		};
+	})
+	.catch(function(err) {
+		console.error('Error accessing camera:', err);
+		let errorMessage = 'Unable to access camera. ';
+		if (err.name === 'NotAllowedError') {
+			errorMessage += 'Please allow camera access and try again.';
+		} else if (err.name === 'NotFoundError') {
+			errorMessage += 'No camera found. Please connect a camera and try again.';
+		} else {
+			errorMessage += 'Please check camera permissions and try again.';
+		}
+		showAlert(errorMessage, 'danger');
+	});
+}
+
+async function attemptReconnect() {
+	if (manualStop) return;
+	try {
+		console.log('Reconnecting camera...');
+		const mediaStream = await navigator.mediaDevices.getUserMedia({
+			video: {
+				width: { ideal: 1280 },
+				height: { ideal: 720 },
+				facingMode: 'user'
+			}
+		});
+		stream = mediaStream;
+		const video = document.getElementById('livenessVideo');
+		video.srcObject = stream;
+		stream.getVideoTracks().forEach(track => {
+			track.onended = () => {
+				console.warn('Video track ended again, retrying reconnect...');
+				if (!manualStop) attemptReconnect();
+			};
+		});
+		console.log('Camera reconnected');
+	} catch (e) {
+		console.error('Reconnect failed:', e);
+		showAlert('Camera disconnected. Please check the camera and permissions.', 'warning');
+		setTimeout(() => { if (!manualStop) attemptReconnect(); }, 3000);
+	}
+}
+
+function processFrame() {
+	if (!stream || !currentSessionId) {
+		console.log('No stream or session ID, stopping frame processing');
+		return;
+	}
+	
+	const video = document.getElementById('livenessVideo');
+	if (video.readyState < 2) {
+		console.log('Video not ready, retrying...');
+		setTimeout(processFrame, 500);
+		return;
+	}
+	
+	const canvas = document.getElementById('livenessCanvas');
+	const context = canvas.getContext('2d');
+	
+	// Set canvas size to match video
+	canvas.width = video.videoWidth;
+	canvas.height = video.videoHeight;
+	
+	// Draw video frame to canvas
+	context.drawImage(video, 0, 0, canvas.width, canvas.height);
+	
+	console.log('Processing frame for position:', currentStep);
+	
+	// Convert to base64
+	canvas.toBlob(function(blob) {
+		const reader = new FileReader();
+		reader.onload = function(e) {
+			const base64Data = e.target.result.split(',')[1];
+			lastFrameByStep[currentStep] = base64Data;
+			sendFrameToServer(base64Data);
+		};
+		reader.readAsDataURL(blob);
+	}, 'image/jpeg', 0.9);
+	
+	// Continue processing
+	setTimeout(processFrame, 2000);
+}
+
+function sendFrameToServer(frameData) {
+	if (!requireAuthOrRedirect()) {
+		return;
+	}
+	
+	console.log('Sending frame to server for position:', currentStep);
+	
+	fetch(`${API_BASE}/api/v1/liveness/detect`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Accept': 'application/json',
+			'Authorization': 'Bearer ' + getAccessToken()
+		},
+		body: JSON.stringify({
+			session_id: currentSessionId,
+			position: currentStep,
+			frame_data: frameData
+		})
+	})
+	.then(async response => {
+		console.log('Liveness detect response status:', response.status);
+		if (response.status === 401 || response.status === 403) {
+			localStorage.removeItem('fastapi_access_token');
+			showAuthError();
+			throw new Error('Unauthorized - please get a new access token');
+		}
+		return parseJsonSafe(response);
+	})
+	.then(data => {
+		console.log('Liveness detection result:', data);
+		if (data.success) {
+			capturedFrames[currentStep] = data;
+			markStepComplete(currentStep);
+			
+			// Check if liveness detection passed
+			if (data.is_live && data.confidence_score > 0.7) {
+				// Check if session is completed (all 3 steps done)
+				if (data.session_completed) {
+					console.log('Liveness detection session completed successfully!');
+					completeStudentRegistration();
+					return; // Stop processing
+				}
+				
+				// Move to next step
+				moveToNextStep();
+			} else {
+				console.log('Liveness detection failed, retrying...');
+				setTimeout(processFrame, 1000);
+			}
+		} else {
+			console.error('Frame processing failed:', data.message);
+			// Retry after a short delay
+			setTimeout(processFrame, 1000);
+		}
+	})
+	.catch(error => {
+		console.error('Error sending frame:', error);
+		showAlert('Error processing liveness detection: ' + error.message, 'warning');
+		setTimeout(processFrame, 2000);
+	});
+}
+
+function moveToNextStep() {
+	const steps = ['center', 'left', 'right'];
+	const currentIndex = steps.indexOf(currentStep);
+	
+	if (currentIndex < steps.length - 1) {
+		currentStep = steps[currentIndex + 1];
+		updateStep(currentStep);
+		setTimeout(processFrame, 2000);
+	} else {
+		// All steps completed - wait for backend to complete the session
+		console.log('All liveness steps completed - waiting for backend completion');
+		updateProgress(100);
+		// The backend will return session_completed=true on the next frame
+		// No need to call verifyLivenessCompletion() anymore
+	}
+}
+
+function updateStep(step) {
+	currentStep = step;
+	const stepText = document.getElementById('stepText');
+	const progressBar = document.getElementById('livenessProgress');
+	
+	switch(step) {
+		case 'center':
+			stepText.textContent = 'Please face the camera directly';
+			progressBar.style.width = '33%';
+			break;
+		case 'left':
+			stepText.textContent = 'Please turn your head to the left';
+			progressBar.style.width = '66%';
+			break;
+		case 'right':
+			stepText.textContent = 'Please turn your head to the right';
+			progressBar.style.width = '100%';
+			break;
+	}
+}
+
+function markStepComplete(step) {
+	const stepElement = document.getElementById('step' + step.charAt(0).toUpperCase() + step.slice(1));
+	stepElement.innerHTML = '<i class="bi bi-check-circle-fill text-success me-2"></i>' + step.charAt(0).toUpperCase() + step.slice(1);
+}
+
+function showLivenessSuccess() {
+	const statusDiv = document.getElementById('livenessStatus');
+	statusDiv.innerHTML = `
+		<div class="alert alert-success">
+			<i class="bi bi-check-circle-fill me-2"></i>
+			Student embeddings captured and saved successfully!
+		</div>
+	`;
+	
+	document.getElementById('submitBtn').disabled = false;
+	document.getElementById('startLivenessBtn').style.display = 'none';
+	document.getElementById('retryLivenessBtn').style.display = 'inline-block';
+}
+
+async function markAttendance(studentId) {
+	try {
+		if (!requireAuthOrRedirect()) return;
+		if (!API_BASE) await resolveApiBase();
+		const response = await fetch(`${API_BASE}/api/v1/attendance/mark?student_id=${studentId}`, {
+			method: 'POST',
+			headers: {
+				'Accept': 'application/json',
+				'Authorization': 'Bearer ' + getAccessToken()
+			}
+		});
+		const data = await parseJsonSafe(response);
+		if (data.success) {
+			showAlert(data.message || 'Attendance marked successfully', 'success');
+		} else {
+			showAlert(data.message || 'Failed to mark attendance', 'warning');
+		}
+	} catch (e) {
+		console.error('Attendance mark error:', e);
+		showAlert('Failed to mark attendance: ' + e.message, 'warning');
+	}
+}
+
+function enableRetry() {
+	document.getElementById('startLivenessBtn').style.display = 'none';
+	document.getElementById('retryLivenessBtn').style.display = 'inline-block';
+}
+
+function retryLivenessDetection() {
+	// Reset state
+	currentSessionId = null;
+	currentStep = 'center';
+	capturedFrames = {};
+	attendanceMarked = false;
+	
+	// Reset UI
+	document.getElementById('livenessStatus').innerHTML = `
+		<div class="alert alert-info" id="livenessInfo">
+			<i class="bi bi-info-circle me-2"></i>
+			Click "Start Liveness Detection" to begin
+		</div>
+	`;
+	
+	document.getElementById('submitBtn').disabled = true;
+	document.getElementById('startLivenessBtn').style.display = 'inline-block';
+	document.getElementById('retryLivenessBtn').style.display = 'none';
+	
+	// Reset step indicators
+	['Center', 'Left', 'Right'].forEach(step => {
+		const stepElement = document.getElementById('step' + step);
+		stepElement.innerHTML = '<i class="bi bi-circle me-2"></i>' + step;
+	});
+	
+	// Start new detection
+	startLivenessDetection();
+}
+
+function closeLivenessDetection() {
+	if (stream) {
+		stream.getTracks().forEach(track => track.stop());
+		stream = null;
+	}
+	
+	if (livenessModal) {
+		livenessModal.hide();
+	}
+}
+
+// Face Capture Functions
+function startFaceCapture() {
+	startFaceCaptureCamera();
+	faceCaptureModal.show();
+}
+
+function startFaceCaptureCamera() {
+	navigator.mediaDevices.getUserMedia({ 
+		video: { 
+			width: { ideal: 1280 }, 
+			height: { ideal: 720 },
+			facingMode: 'user'
+		} 
+	})
+	.then(function(mediaStream) {
+		stream = mediaStream;
+		const video = document.getElementById('faceCaptureVideo');
+		video.srcObject = stream;
+	})
+	.catch(function(err) {
+		console.error('Error accessing camera:', err);
+		showAlert('Unable to access camera. Please check permissions and try again.', 'danger');
+	});
+}
+
+function captureFacePhoto() {
+	const video = document.getElementById('faceCaptureVideo');
+	const canvas = document.getElementById('faceCaptureCanvas');
+	const context = canvas.getContext('2d');
+	
+	// Set canvas size to match video
+	canvas.width = video.videoWidth;
+	canvas.height = video.videoHeight;
+	
+	// Draw video frame to canvas
+	context.drawImage(video, 0, 0, canvas.width, canvas.height);
+	
+	// Convert to base64
+	const base64Data = canvas.toDataURL('image/jpeg', 0.9);
+	capturedFaceImage = base64Data;
+	
+	// Show preview
+	document.getElementById('previewImage').src = base64Data;
+	document.getElementById('capturedImagePreview').style.display = 'block';
+	document.getElementById('confirmCaptureBtn').style.display = 'inline-block';
+	
+	// Hide capture button
+	document.getElementById('capturePhotoBtn').style.display = 'none';
+}
+
+function confirmFaceCapture() {
+	if (capturedFaceImage) {
+		// Store the captured image
+		document.getElementById('face_image').value = capturedFaceImage.split(',')[1]; // Remove data:image/jpeg;base64, prefix
+		
+		// Show success message
+		showFaceCaptureSuccess();
+		closeFaceCapture();
+	}
+}
+
+function closeFaceCapture() {
+	if (stream) {
+		stream.getTracks().forEach(track => track.stop());
+		stream = null;
+	}
+	
+	if (faceCaptureModal) {
+		faceCaptureModal.hide();
+	}
+	
+	// Reset UI
+	document.getElementById('capturedImagePreview').style.display = 'none';
+	document.getElementById('confirmCaptureBtn').style.display = 'none';
+	document.getElementById('capturePhotoBtn').style.display = 'inline-block';
+	capturedFaceImage = null;
+}
+
+function showFaceCaptureSuccess() {
+	const statusDiv = document.getElementById('livenessStatus');
+	statusDiv.innerHTML = `
+		<div class="alert alert-success">
+			<i class="bi bi-check-circle-fill me-2"></i>
+			Face photo captured successfully!
+		</div>
+	`;
+	
+	document.getElementById('submitBtn').disabled = false;
+	document.getElementById('startLivenessBtn').style.display = 'none';
+	document.getElementById('startFaceCaptureBtn').style.display = 'none';
+	document.getElementById('retryLivenessBtn').style.display = 'inline-block';
+}
+
+async function completeStudentRegistration() {
+	try {
+		const name = document.getElementById('name').value;
+		const rollNumber = document.getElementById('roll_number').value;
+		
+		if (!name || !rollNumber) {
+			showAlert('Name and Roll Number are required', 'warning');
+			return;
+		}
+		
+		// Show success message and close modal since embeddings are already saved
+		showLivenessSuccess();
+		closeLivenessDetection();
+		
+		// Store the embedding data in hidden fields for form submission
+		if (capturedFrames.center && capturedFrames.center.confidence_score > 0.7) {
+			document.getElementById('liveness_score').value = capturedFrames.center.confidence_score;
+			// The embeddings are already saved in the backend during liveness detection
+			document.getElementById('face_embedding').value = 'liveness_verified';
+		}
+		
+		console.log('Student registration completed successfully with liveness detection');
+		
+	} catch (error) {
+		console.error('Error during student registration completion:', error);
+		showAlert('Error completing registration. Please try again.', 'warning');
+		enableRetry();
+	}
+}
+
+function showAlert(message, type) {
+	const alertDiv = document.createElement('div');
+	alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+	alertDiv.innerHTML = `
+		${message}
+		<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+	`;
+	
+	document.querySelector('.card-body').insertBefore(alertDiv, document.querySelector('.card-body').firstChild);
+	
+	// Auto-dismiss after 5 seconds
+	setTimeout(() => {
+		if (alertDiv.parentNode) {
+			alertDiv.remove();
+		}
+	}, 5000);
+}
+
+// Token helpers moved above; obtain token from localStorage under key 'fastapi_access_token'
 
 // Form validation
 document.getElementById('studentForm').addEventListener('submit', function(e) {
-    const faceEmbedding = document.getElementById('face_embedding').value;
-    if (!faceEmbedding) {
-        e.preventDefault();
-        showAlert('Please complete liveness detection before submitting.', 'warning');
-        return false;
-    }
+	const faceEmbedding = document.getElementById('face_embedding').value;
+	const faceImage = document.getElementById('face_image').value;
+	
+	if (!faceEmbedding && !faceImage) {
+		e.preventDefault();
+		showAlert('Please complete face verification (liveness detection or face capture) before submitting.', 'warning');
+		return false;
+	}
 });
 
-// Clean up when modal is closed
+// Helper functions for timeout and retry logic
+function handleStepTimeout() {
+	console.log(`Step timeout for ${currentStep}`);
+	retryCount++;
+	if (retryCount >= MAX_RETRIES) {
+		console.log(`Max retries reached for step ${currentStep} due to timeout`);
+		handleStepFailure();
+	} else {
+		console.log(`Retrying step ${currentStep} after timeout, attempt ${retryCount}/${MAX_RETRIES}`);
+		showStepTimeoutMessage();
+		setTimeout(() => {
+			frameProcessingActive = false;
+			processFrame();
+		}, 1000);
+	}
+}
+
+function handleStepFailure() {
+	console.log(`Step ${currentStep} failed after ${MAX_RETRIES} attempts`);
+	showStepFailureMessage();
+	// Reset retry count and allow manual retry
+	retryCount = 0;
+	frameProcessingActive = false;
+	
+	// Show retry button for this step
+	const stepElement = document.getElementById('step' + currentStep.charAt(0).toUpperCase() + currentStep.slice(1));
+	stepElement.innerHTML = `
+		<i class="bi bi-exclamation-triangle text-warning me-2"></i>${currentStep.charAt(0).toUpperCase() + currentStep.slice(1)}
+		<button type="button" class="btn btn-sm btn-warning ms-2" onclick="retryCurrentStep()">
+			<i class="bi bi-arrow-clockwise"></i> Retry
+		</button>
+	`;
+}
+
+function handleFrameProcessingError(errorMessage) {
+	console.error('Frame processing error:', errorMessage);
+	showAlert('Error processing liveness detection: ' + errorMessage, 'warning');
+	retryCount++;
+	if (retryCount >= MAX_RETRIES) {
+		handleStepFailure();
+	} else {
+		setTimeout(() => {
+			frameProcessingActive = false;
+			processFrame();
+		}, 2000);
+	}
+}
+
+function retryCurrentStep() {
+	console.log(`Retrying step ${currentStep}`);
+	retryCount = 0;
+	// Reset step indicator
+	const stepElement = document.getElementById('step' + currentStep.charAt(0).toUpperCase() + currentStep.slice(1));
+	stepElement.innerHTML = '<i class="bi bi-circle me-2"></i>' + currentStep.charAt(0).toUpperCase() + currentStep.slice(1);
+	
+	// Resume processing
+	setTimeout(() => {
+		frameProcessingActive = false;
+		processFrame();
+	}, 500);
+}
+
+function showStepRetryMessage() {
+	const stepText = document.getElementById('stepText');
+	stepText.innerHTML = `
+		<i class="bi bi-exclamation-triangle text-warning me-2"></i>
+		Please adjust your head position and try again (${retryCount}/${MAX_RETRIES})
+	`;
+}
+
+function showStepTimeoutMessage() {
+	const stepText = document.getElementById('stepText');
+	stepText.innerHTML = `
+		<i class="bi bi-clock text-warning me-2"></i>
+		No movement detected. Please try again (${retryCount}/${MAX_RETRIES})
+	`;
+}
+
+function showStepFailureMessage() {
+	const stepText = document.getElementById('stepText');
+	stepText.innerHTML = `
+		<i class="bi bi-x-circle text-danger me-2"></i>
+		Step failed. Please click retry or restart detection.
+	`;
+}
+
+// Clean up when modals are closed
 document.getElementById('livenessModal').addEventListener('hidden.bs.modal', function () {
-    closeLivenessDetection();
+	closeLivenessDetection();
+});
+
+document.getElementById('faceCaptureModal').addEventListener('hidden.bs.modal', function () {
+	closeFaceCapture();
 });
 </script>
 
 <style>
 .step-indicators {
-    margin-top: 1rem;
+	margin-top: 1rem;
 }
 
 .step-item {
-    padding: 0.5rem;
-    margin-bottom: 0.5rem;
-    border-radius: 4px;
-    background-color: #f8f9fa;
+	padding: 0.5rem;
+	margin-bottom: 0.5rem;
+	border-radius: 4px;
+	background-color: #f8f9fa;
 }
 
 .step-item.completed {
-    background-color: #d4edda;
-    color: #155724;
+	background-color: #d4edda;
+	color: #155724;
 }
 
 .liveness-instructions {
-    padding: 1rem;
-    background-color: #f8f9fa;
-    border-radius: 8px;
+	padding: 1rem;
+	background-color: #f8f9fa;
+	border-radius: 8px;
 }
 
 #livenessVideo {
-    border: 2px solid #dee2e6;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+	border: 2px solid #dee2e6;
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 </style>
 {% endblock %}

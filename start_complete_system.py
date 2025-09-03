@@ -42,18 +42,22 @@ def setup_django():
     
     # Change to backend directory
     backend_dir = Path("backend")
+    project_root = Path.cwd()
     os.chdir(backend_dir)
     
     # Run Django migrations
     logger.info("Running Django migrations...")
-    if not run_command("python manage.py makemigrations attendance"):
+    if run_command(f'"{sys.executable}" manage.py makemigrations attendance') is None:
         logger.error("Django makemigrations failed")
+        os.chdir(project_root)
         return False
     
-    if not run_command("python manage.py migrate"):
+    if run_command(f'"{sys.executable}" manage.py migrate') is None:
         logger.error("Django migrate failed")
+        os.chdir(project_root)
         return False
     
+    os.chdir(project_root)
     logger.info("Django setup completed successfully")
     return True
 
@@ -63,14 +67,17 @@ def setup_fastapi():
     
     # Change to backend directory
     backend_dir = Path("backend")
+    project_root = Path.cwd()
     os.chdir(backend_dir)
     
     # Test FastAPI setup
     logger.info("Testing FastAPI setup...")
-    if not run_command("python test_fastapi.py"):
+    if run_command(f'"{sys.executable}" test_fastapi.py') is None:
         logger.error("FastAPI setup test failed")
+        os.chdir(project_root)
         return False
     
+    os.chdir(project_root)
     logger.info("FastAPI setup completed successfully")
     return True
 
@@ -78,26 +85,29 @@ def start_servers():
     """Start both Django and FastAPI servers"""
     logger.info("Starting servers...")
     
-    # Start Django server in background
-    logger.info("Starting Django server...")
+    # Start Django server in background on port 8000
+    logger.info("Starting Django server on port 8000...")
     django_process = subprocess.Popen(
-        ["python", "start_backend.py"],
+        [sys.executable, "start_django.py"],
         cwd="backend",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
     
     # Wait a bit for Django to start
-    time.sleep(3)
+    time.sleep(5)
     
-    # Start FastAPI server in background
-    logger.info("Starting FastAPI server...")
+    # Start FastAPI server in background on port 8001
+    logger.info("Starting FastAPI server on port 8001...")
     fastapi_process = subprocess.Popen(
-        ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"],
+        [sys.executable, "start_fastapi.py"],
         cwd="backend",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
+    
+    # Wait for FastAPI to start
+    time.sleep(3)
     
     logger.info("🎉 Both servers started successfully!")
     logger.info("📱 Django Web Interface: http://localhost:8000")
@@ -122,6 +132,13 @@ def main():
     # Check if we're in the right directory
     if not Path("backend").exists():
         logger.error("Please run this script from the project root directory")
+        sys.exit(1)
+    
+    # Ensure models are downloaded
+    logger.info("Verifying required AI models...")
+    dl_out = run_command(f'"{sys.executable}" download_models.py', cwd=str(Path.cwd()))
+    if dl_out is None:
+        logger.error("Model download/verification failed. See logs above.")
         sys.exit(1)
     
     # Setup Django

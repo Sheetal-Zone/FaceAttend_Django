@@ -29,59 +29,61 @@
 </div>
 
 <!-- Camera Streams -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="bi bi-camera-video me-2"></i>
-                    Camera Streams
-                </h6>
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">
+            <i class="fas fa-video"></i> Camera Streams
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <!-- External Camera Streams -->
+            {% for camera in cameras %}
+            <div class="col-md-6 mb-3">
+                <div class="border rounded p-3">
+                    <h6 class="mb-2">
+                        <i class="fas fa-camera"></i> {{ camera.name }}
+                    </h6>
+                    <div class="video-container mb-2">
+                        <video id="camera-{{ camera.id }}" class="w-100" autoplay muted>
+                            <source src="{{ camera.stream_url }}" type="application/x-mpegURL">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="badge bg-success">Active</span>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewCameraDetails({{ camera.id }})">
+                            <i class="fas fa-eye"></i> View Details
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                {% if camera_streams %}
-                    <div class="row">
-                        {% for camera in camera_streams %}
-                        <div class="col-md-6 mb-3">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-camera me-2"></i>
-                                        {{ camera.name }}
-                                        {% if camera.location %}
-                                            <small class="text-muted">({{ camera.location }})</small>
-                                        {% endif %}
-                                    </h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="camera-feed" data-camera-id="{{ camera.id }}">
-                                        <div class="video-container bg-dark rounded" style="height: 300px; position: relative;">
-                                            <div class="d-flex align-items-center justify-content-center h-100 text-white">
-                                                <div class="text-center">
-                                                    <i class="bi bi-camera-video-off fa-3x mb-3"></i>
-                                                    <p>Camera feed will appear here</p>
-                                                    <small class="text-muted">{{ camera.rtsp_url|default:camera.http_url }}</small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="mt-2">
-                                            <span class="badge bg-secondary">Status: Inactive</span>
-                                            <span class="badge bg-info">Faces: 0</span>
-                                            <span class="badge bg-success">Recognized: 0</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+            {% endfor %}
+            
+            <!-- Laptop Camera Section -->
+            <div class="col-md-6 mb-3">
+                <div class="border rounded p-3 border-primary">
+                    <h6 class="mb-2 text-primary">
+                        <i class="bi bi-laptop"></i> Laptop Camera
+                    </h6>
+                    <div class="video-container mb-2">
+                        <video id="laptopCameraVideo" class="w-100" autoplay muted>
+                            <source src="" type="application/x-mpegURL">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span id="laptopCameraStatus" class="badge bg-secondary">Inactive</span>
+                        <div>
+                            <button id="startLaptopCameraBtn" class="btn btn-sm btn-success" onclick="startLaptopCamera()">
+                                <i class="bi bi-play-circle"></i> Start
+                            </button>
+                            <button id="stopLaptopCameraBtn" class="btn btn-sm btn-danger" onclick="stopLaptopCamera()" style="display: none;">
+                                <i class="bi bi-stop-circle"></i> Stop
+                            </button>
                         </div>
-                        {% endfor %}
                     </div>
-                {% else %}
-                    <div class="text-center text-muted py-4">
-                        <i class="bi bi-camera-video-off fa-3x mb-3"></i>
-                        <h5>No camera streams configured</h5>
-                        <p>Please add camera streams in the <a href="{% url 'attendance:camera_streams' %}">Cameras</a> section.</p>
-                    </div>
-                {% endif %}
+                </div>
             </div>
         </div>
     </div>
@@ -192,6 +194,7 @@ class DetectionMonitor {
         this.setupWebSocket();
         this.setupEventListeners();
         this.updateStats();
+        this.initializeLaptopCamera(); // Initialize laptop camera functionality
     }
     
     setupWebSocket() {
@@ -368,16 +371,170 @@ class DetectionMonitor {
         }
     }
     
-    showConnectionStatus(message, type) {
-        const statusElement = document.getElementById('connectionStatus');
-        const messageElement = document.getElementById('connectionMessage');
+         showConnectionStatus(message, type) {
+         const statusElement = document.getElementById('connectionStatus');
+         const messageElement = document.getElementById('connectionMessage');
+         
+         messageElement.textContent = message;
+         messageElement.className = `toast-body text-${type}`;
+         
+         const toast = new bootstrap.Toast(statusElement);
+         toast.show();
+     }
+     
+     // Helper function to get access token (placeholder)
+     getAccessToken() {
+         // This should be implemented to get the actual token from Django session
+         // For now, return empty string (will cause 403 errors until implemented)
+         return '';
+     }
+    
+    // Laptop Camera Functionality
+    initializeLaptopCamera() {
+        const startBtn = document.getElementById('startLaptopCameraBtn');
+        const stopBtn = document.getElementById('stopLaptopCameraBtn');
+        const statusBadge = document.getElementById('laptopCameraStatus');
         
-        messageElement.textContent = message;
-        messageElement.className = `toast-body text-${type}`;
-        
-        const toast = new bootstrap.Toast(statusElement);
-        toast.show();
+        if (startBtn && stopBtn) {
+            startBtn.addEventListener('click', () => this.startLaptopCamera());
+            stopBtn.addEventListener('click', () => this.stopLaptopCamera());
+        }
     }
+
+    async startLaptopCamera() {
+        try {
+            // Get access to laptop camera
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'user'
+                } 
+            });
+            
+            this.laptopCameraStream = stream;
+            this.laptopVideoElement = document.getElementById('laptopCameraVideo');
+            this.laptopVideoElement.srcObject = stream;
+            
+            // Start FastAPI laptop camera processor
+            const response = await fetch('/api/v1/detection/laptop-camera/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.getAccessToken()}`
+                }
+            });
+            
+            if (response.ok) {
+                                 // Update UI
+                 document.getElementById('startLaptopCameraBtn').style.display = 'none';
+                 document.getElementById('stopLaptopCameraBtn').style.display = 'inline-block';
+                 document.getElementById('laptopCameraStatus').textContent = 'Active';
+                 document.getElementById('laptopCameraStatus').className = 'badge bg-success';
+                
+                this.showConnectionStatus('Laptop camera started successfully', 'success');
+                
+                // Start processing frames
+                this.startLaptopCameraProcessing();
+            } else {
+                throw new Error('Failed to start laptop camera processor');
+            }
+        } catch (error) {
+            console.error('Error starting laptop camera:', error);
+            this.showConnectionStatus('Failed to start laptop camera: ' + error.message, 'error');
+        }
+    }
+
+    async stopLaptopCamera() {
+        try {
+            // Stop FastAPI laptop camera processor
+            const response = await fetch('/api/v1/detection/laptop-camera/stop', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.getAccessToken()}`
+                }
+            });
+            
+            if (response.ok) {
+                                 // Update UI
+                 document.getElementById('startLaptopCameraBtn').style.display = 'inline-block';
+                 document.getElementById('stopLaptopCameraBtn').style.display = 'none';
+                 document.getElementById('laptopCameraStatus').textContent = 'Inactive';
+                 document.getElementById('laptopCameraStatus').className = 'badge bg-secondary';
+                
+                this.showConnectionStatus('Laptop camera stopped successfully', 'success');
+                
+                                 // Stop video stream
+                 if (this.laptopCameraStream) {
+                     this.laptopCameraStream.getTracks().forEach(track => track.stop());
+                     this.laptopCameraStream = null;
+                 }
+                 
+                 if (this.laptopVideoElement) {
+                     this.laptopVideoElement.srcObject = null;
+                 }
+            } else {
+                                 throw new Error('Failed to stop laptop camera processor');
+            }
+        } catch (error) {
+                         console.error('Error stopping laptop camera:', error);
+             this.showConnectionStatus('Failed to stop laptop camera: ' + error.message, 'error');
+        }
+    }
+
+    startLaptopCameraProcessing() {
+        if (!this.laptopCameraStream) return;
+        
+        // Process frames for face detection
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 640;
+        canvas.height = 480;
+        
+                 const processFrame = () => {
+             if (!this.laptopCameraStream) return;
+             
+             // Draw video frame to canvas
+             ctx.drawImage(this.laptopVideoElement, 0, 0, canvas.width, canvas.height);
+            
+            // Convert to blob and send to FastAPI for processing
+            canvas.toBlob(async (blob) => {
+                try {
+                    const formData = new FormData();
+                    formData.append('frame', blob);
+                    
+                    const response = await fetch('/api/v1/detection/process-frame', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.getAccessToken()}`
+                        },
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                                                 this.updateLaptopCameraStats(result);
+                    }
+                } catch (error) {
+                    console.error('Error processing frame:', error);
+                }
+            }, 'image/jpeg', 0.8);
+            
+            // Continue processing
+            requestAnimationFrame(processFrame);
+        };
+        
+        processFrame();
+    }
+
+         updateLaptopCameraStats(result) {
+         // Update detection statistics
+         if (result.faces_detected > 0) {
+             // Update UI with detection results
+             console.log(`${result.faces_detected} face(s) detected`);
+         }
+     }
     
     startDetection() {
         document.getElementById('startDetection').style.display = 'none';

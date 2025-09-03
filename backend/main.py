@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
 from app.database import create_tables, get_db
 from app.auth import get_current_admin
-from app.routers import students, attendance, detection, auth, liveness
+from app.routers import students, attendance, detection, auth, liveness, face_detection
 from app.ai_models import face_recognition_system
 from app.liveness_detection import liveness_detection_engine
 from app.config import settings
@@ -40,6 +40,7 @@ app.include_router(students.router, prefix="/api/v1")
 app.include_router(attendance.router, prefix="/api/v1")
 app.include_router(detection.router, prefix="/api/v1")
 app.include_router(liveness.router, prefix="/api/v1")
+app.include_router(face_detection.router, prefix="/api/v1")
 
 
 @app.on_event("startup")

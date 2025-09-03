@@ -7,6 +7,7 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
+import logging
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -46,16 +47,16 @@ def verify_token(token: str) -> Optional[str]:
         if username is None:
             return None
         return username
-    except JWTError:
+    except JWTError as e:
+        logging.getLogger(__name__).warning(f"JWT verification failed: {e}")
         return None
 
 
 def authenticate_admin(username: str, password: str) -> bool:
     """Authenticate admin user"""
-    if (username == settings.admin_username and 
-        verify_password(password, get_password_hash(settings.admin_password))):
-        return True
-    return False
+    # Compare directly against configured admin credentials.
+    # Note: For production, store and compare a persistent password hash.
+    return (username == settings.admin_username and password == settings.admin_password)
 
 
 async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
@@ -67,8 +68,13 @@ async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(
     )
     
     token = credentials.credentials
+    logger = logging.getLogger(__name__)
+    if not token:
+        logger.warning("401 Unauthorized: Missing Bearer token on protected endpoint access")
+        raise credentials_exception
     username = verify_token(token)
     if username is None or username != settings.admin_username:
+        logger.warning("401 Unauthorized: Invalid or unauthorized token used to access protected endpoint")
         raise credentials_exception
     
     return username
@@ -79,3 +85,35 @@ def init_admin_password():
     """Initialize admin password hash"""
     hashed_password = get_password_hash(settings.admin_password)
     return hashed_password
+
+
+def create_admin_user():
+    """Create admin user in the database if it doesn't exist"""
+    try:
+        from app.database import SessionLocal
+        from app.models import AdminUser
+        
+        db = SessionLocal()
+        try:
+            # Check if admin user already exists
+            admin_user = db.query(AdminUser).filter(AdminUser.username == settings.admin_username).first()
+            
+            if not admin_user:
+                # Create new admin user
+                admin_user = AdminUser(
+                    username=settings.admin_username,
+                    hashed_password=get_password_hash(settings.admin_password),
+                    is_active=True
+                )
+                db.add(admin_user)
+                db.commit()
+                logging.getLogger(__name__).info("Admin user created successfully")
+            else:
+                logging.getLogger(__name__).info("Admin user already exists")
+                
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Admin user creation failed: {e}")
+        # This is not critical, so we don't raise an exception

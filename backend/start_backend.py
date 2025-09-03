@@ -22,8 +22,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def run_command(command, cwd=None):
-    """Run a command and return the result"""
+def run_command(command, cwd=None, return_output=False):
+    """Run a command and return True for success, False for failure"""
     try:
         result = subprocess.run(
             command,
@@ -34,11 +34,13 @@ def run_command(command, cwd=None):
             check=True
         )
         logger.info(f"Command successful: {command}")
-        return result.stdout
+        if return_output:
+            return result.stdout
+        return True
     except subprocess.CalledProcessError as e:
         logger.error(f"Command failed: {command}")
         logger.error(f"Error: {e.stderr}")
-        return None
+        return False
 
 def ensure_database():
     """Ensure database is properly set up"""
@@ -60,7 +62,7 @@ def ensure_database():
     
     # Create superuser if it doesn't exist
     logger.info("Checking for superuser...")
-    result = run_command("python manage.py shell -c \"from django.contrib.auth.models import User; print('Superuser exists' if User.objects.filter(is_superuser=True).exists() else 'No superuser')\"")
+    result = run_command("python manage.py shell -c \"from django.contrib.auth.models import User; print('Superuser exists' if User.objects.filter(is_superuser=True).exists() else 'No superuser')\"", return_output=True)
     
     if result and "No superuser" in result:
         logger.info("Creating superuser...")
@@ -117,6 +119,14 @@ def main():
     
     # Change to backend directory
     os.chdir(backend_dir)
+    
+    # Ensure models are downloaded (call root-level script)
+    try:
+        root_dir = backend_dir.parent
+        logger.info("Verifying required AI models via root downloader...")
+        subprocess.run([sys.executable, str(root_dir / "download_models.py")], check=True)
+    except Exception as e:
+        logger.warning(f"Model verification script failed or missing: {e}")
     
     # Ensure database is set up
     if not ensure_database():

@@ -26,7 +26,7 @@ class StudentAdmin(admin.ModelAdmin):
             'fields': ('placement_status', 'assessment_status')
         }),
         ('Face Recognition', {
-            'fields': ('reference_image', 'face_embedding', 'face_embedding_updated', 'recognition_confidence'),
+            'fields': ('face_embedding', 'face_embedding_updated', 'recognition_confidence'),
             'classes': ('collapse',)
         }),
         ('Status', {

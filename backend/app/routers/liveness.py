@@ -1,23 +1,27 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import Optional
-import json
-import numpy as np
-import cv2
-import base64
+"""
+Liveness Detection Router - Clean version without duplicates
+"""
+
+import logging
 import uuid
 from datetime import datetime, timedelta
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
 from app.auth import get_current_admin
 from app.database import get_db
-from app.models import Student, LivenessDetectionSession
+from app.models import LivenessDetectionSession, Student
 from app.schemas import (
-    LivenessDetectionSessionCreate, LivenessDetectionSession as LivenessSessionSchema,
-    LivenessDetectionRequest, LivenessDetectionResponse,
-    LivenessVerificationRequest, LivenessVerificationResponse,
-    StudentRegistrationWithLiveness, APIResponse
+    APIResponse,
+    LivenessDetectionRequest,
+    LivenessDetectionSessionCreate,
+    LivenessDetectionResponse,
+    LivenessVerificationRequest,
+    LivenessVerificationResponse,
+    StudentRegistrationWithLiveness
 )
-from app.liveness_detection import liveness_detection_engine
-import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/liveness", tags=["Liveness Detection"])
@@ -31,6 +35,8 @@ async def create_liveness_session(
 ):
     """Create a new liveness detection session"""
     try:
+        logger.info(f"POST /api/v1/liveness/session by user '{current_admin}' - Creating new liveness session")
+        
         # Generate unique session ID
         session_id = str(uuid.uuid4())
         
@@ -49,7 +55,7 @@ async def create_liveness_session(
         db.commit()
         db.refresh(session)
         
-        logger.info(f"Created liveness detection session: {session_id}")
+        logger.info(f"Created liveness detection session: {session_id} (expires: {expires_at.isoformat()})")
         
         return {
             "success": True,
@@ -70,107 +76,222 @@ async def create_liveness_session(
 
 
 @router.post("/detect", response_model=LivenessDetectionResponse)
-async def process_liveness_frame(
+async def detect_liveness(
     request: LivenessDetectionRequest,
     current_admin: str = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Process a frame for liveness detection"""
+    """Detect liveness from captured frame"""
     try:
-        # Get session
+        logger.info(f"POST /api/v1/liveness/detect by user '{current_admin}' - Processing liveness detection for session {request.session_id}")
+        
+        # Verify session exists and is valid
         session = db.query(LivenessDetectionSession).filter(
             LivenessDetectionSession.session_id == request.session_id
         ).first()
         
         if not session:
+            logger.warning(f"Invalid session ID: {request.session_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Liveness detection session not found"
+                detail="Session not found"
             )
         
-        # Check if session is expired
         if session.expires_at < datetime.utcnow():
+            logger.warning(f"Expired session: {request.session_id}")
             session.status = "EXPIRED"
             db.commit()
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Liveness detection session has expired"
+                status_code=status.HTTP_410_GONE,
+                detail="Session expired"
             )
         
-        # Check if session is already completed
-        if session.status in ["COMPLETED", "FAILED"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Liveness detection session is already {session.status.lower()}"
-            )
+        # Process liveness detection
+        from app.ai_models import liveness_detection_system, face_recognition_system
         
-        # Update session status
-        if session.status == "PENDING":
-            session.status = "IN_PROGRESS"
-            db.commit()
+        # Convert base64 image to numpy array
+        import base64
+        import cv2
+        import numpy as np
+        import json
         
-        # Decode base64 image
         try:
+            # Decode base64 image
             image_data = base64.b64decode(request.frame_data)
             nparr = np.frombuffer(image_data, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if frame is None:
+                raise ValueError("Invalid image data")
+                
         except Exception as e:
+            logger.error(f"Error decoding image: {e}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid image data: {str(e)}"
+                detail="Invalid image data"
             )
         
-        # Process frame for liveness detection
-        result = liveness_detection_engine.process_frame_for_liveness(frame, request.position)
+        # Ensure models are initialized
+        if not liveness_detection_system.initialized:
+            liveness_detection_system.initialize_models()
+        if not face_recognition_system.initialized:
+            face_recognition_system.initialize_models()
+
+        # Perform liveness detection
+        result = liveness_detection_system.detect_liveness(frame, request.position)
         
-        if result['success']:
-            # Store the processed data
-            if request.position == "center":
-                session.center_frame_data = result['frame_data']
-                session.center_embedding = json.dumps(result['embedding'])
-                session.center_verified = True
-            elif request.position == "left":
-                session.left_frame_data = result['frame_data']
-                session.left_embedding = json.dumps(result['embedding'])
-                session.left_verified = True
-            elif request.position == "right":
-                session.right_frame_data = result['frame_data']
-                session.right_embedding = json.dumps(result['embedding'])
-                session.right_verified = True
+        logger.info(f"Liveness detection result for session {request.session_id}: {result}")
+        
+        # Update session with frame data and embedding per position
+        if request.position == "center":
+            session.center_frame_data = request.frame_data
+            try:
+                embedding = face_recognition_system.extract_face_embedding(frame)
+                if embedding is not None:
+                    session.center_embedding = json.dumps(embedding.tolist())
+                    logger.info(f"Center embedding extracted and stored for session {request.session_id}")
+            except Exception as e:
+                logger.warning(f"Center embedding extraction failed: {e}")
+        elif request.position == "left":
+            session.left_frame_data = request.frame_data
+            try:
+                embedding = face_recognition_system.extract_face_embedding(frame)
+                if embedding is not None:
+                    session.left_embedding = json.dumps(embedding.tolist())
+                    logger.info(f"Left embedding extracted and stored for session {request.session_id}")
+            except Exception as e:
+                logger.warning(f"Left embedding extraction failed: {e}")
+        elif request.position == "right":
+            session.right_frame_data = request.frame_data
+            try:
+                embedding = face_recognition_system.extract_face_embedding(frame)
+                if embedding is not None:
+                    session.right_embedding = json.dumps(embedding.tolist())
+                    logger.info(f"Right embedding extracted and stored for session {request.session_id}")
+            except Exception as e:
+                logger.warning(f"Right embedding extraction failed: {e}")
+        
+        # Update session status based on result, track per-position flags and log
+        position = request.position
+        is_live = result.get("is_live", False)
+        confidence = result.get("confidence", 0.0)
+        detected_pose = result.get("detected_pose")
+        logger.info(f"Liveness step '{position}' result: ok={is_live}, conf={confidence:.3f}, detected_pose={detected_pose}")
+
+        if position == "center":
+            session.center_verified = is_live
+        elif position == "left":
+            session.left_verified = is_live
+        elif position == "right":
+            session.right_verified = is_live
+
+        # Check if all positions are completed
+        all_positions_completed = (
+            session.center_verified and 
+            session.left_verified and 
+            session.right_verified and
+            session.center_embedding and 
+            session.left_embedding and 
+            session.right_embedding
+        )
+        
+        if all_positions_completed:
+            # All positions completed - finalize the session
+            logger.info(f"All liveness positions completed for session {request.session_id}, finalizing...")
             
-            session.attempts_count += 1
-            db.commit()
-            
-            logger.info(f"Successfully processed {request.position} frame for session {request.session_id}")
-            
-            return LivenessDetectionResponse(
-                success=True,
-                message=f"Successfully processed {request.position} position",
-                position=request.position,
-                verified=True
-            )
+            # Verify movement and finalize
+            try:
+                # Parse embeddings for movement verification
+                center_emb = np.array(json.loads(session.center_embedding))
+                left_emb = np.array(json.loads(session.left_embedding))
+                right_emb = np.array(json.loads(session.right_embedding))
+                
+                # Verify movement using liveness detection engine
+                from app.liveness_detection import liveness_detection_engine
+                movement_result = liveness_detection_engine.verify_liveness_movement(
+                    center_emb, left_emb, right_emb
+                )
+                
+                session.movement_verified = movement_result['movement_verified']
+                session.liveness_score = movement_result['confidence']
+                
+                if movement_result['movement_verified']:
+                    # Use center embedding as final embedding
+                    session.final_embedding = session.center_embedding
+                    session.status = "COMPLETED"
+                    session.completed_at = datetime.utcnow()
+                    
+                    # Save embeddings to student if student_id is available
+                    if session.student_id:
+                        student = db.query(Student).filter(Student.id == session.student_id).first()
+                        if student:
+                            student.embedding_vector = session.final_embedding
+                            student.liveness_verified = True
+                            student.liveness_verification_date = datetime.utcnow()
+                            student.liveness_confidence_score = session.liveness_score
+                            db.add(student)
+                            logger.info(f"Embeddings saved for Student {student.id} in database table 'students.embedding_vector'")
+                            
+                            # Reload known faces in recognition system
+                            try:
+                                students = db.query(Student).filter(Student.embedding_vector.isnot(None)).all()
+                                students_data = [
+                                    { 'id': s.id, 'embedding_vector': s.embedding_vector }
+                                    for s in students
+                                ]
+                                face_recognition_system.load_known_faces(students_data)
+                                logger.info(f"Reloaded {len(students_data)} known faces in recognition system")
+                            except Exception as e:
+                                logger.warning(f"Failed reloading known faces after liveness completion: {e}")
+                    else:
+                        logger.info(f"Session {request.session_id} completed but no student_id - embeddings saved in session")
+                    
+                    logger.info(f"Liveness detection session {request.session_id} completed successfully with score {session.liveness_score:.3f}")
+                else:
+                    session.status = "FAILED"
+                    session.error_message = movement_result.get('error', 'Movement verification failed')
+                    logger.warning(f"Liveness detection session {request.session_id} failed: {session.error_message}")
+                    
+            except Exception as e:
+                logger.error(f"Error finalizing liveness session {request.session_id}: {e}")
+                session.status = "FAILED"
+                session.error_message = f"Finalization error: {str(e)}"
         else:
-            session.attempts_count += 1
-            session.error_message = result['error']
-            db.commit()
-            
-            logger.warning(f"Failed to process {request.position} frame: {result['error']}")
-            
-            return LivenessDetectionResponse(
-                success=False,
-                message=result['error'],
-                position=request.position,
-                verified=False,
-                error=result['error']
-            )
+            # Session still in progress
+            session.status = "IN_PROGRESS"
+            session.liveness_score = confidence
+        
+        db.commit()
+        
+        # Return response with completion status
+        response_data = {
+            "success": True,
+            "message": "Liveness detection processed",
+            "position": position,
+            "is_live": result.get("is_live", False),
+            "confidence_score": result.get("confidence", 0.0)
+        }
+        
+        # Add completion information if session is completed
+        if session.status == "COMPLETED":
+            response_data.update({
+                "session_completed": True,
+                "liveness_score": session.liveness_score,
+                "movement_verified": session.movement_verified,
+                "final_embedding_saved": True,
+                "student_id": session.student_id
+            })
+            logger.info(f"Liveness detection completed for session {request.session_id} - returning completion response")
+        
+        return LivenessDetectionResponse(**response_data)
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error processing liveness frame: {e}")
+        logger.error(f"Error in liveness detection: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing liveness frame: {str(e)}"
+            detail=f"Error in liveness detection: {str(e)}"
         )
 
 
@@ -182,83 +303,71 @@ async def verify_liveness_completion(
 ):
     """Verify liveness detection completion"""
     try:
+        logger.info(f"POST /api/v1/liveness/verify by user '{current_admin}' - Verifying session {request.session_id}")
+        
         # Get session
         session = db.query(LivenessDetectionSession).filter(
             LivenessDetectionSession.session_id == request.session_id
         ).first()
         
         if not session:
+            logger.warning(f"Session not found: {request.session_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Liveness detection session not found"
             )
         
-        # Check if all positions are verified
-        if not all([session.center_verified, session.left_verified, session.right_verified]):
-            missing_positions = []
-            if not session.center_verified:
-                missing_positions.append("center")
-            if not session.left_verified:
-                missing_positions.append("left")
-            if not session.right_verified:
-                missing_positions.append("right")
-            
-            return LivenessVerificationResponse(
-                success=False,
-                message=f"Missing positions: {', '.join(missing_positions)}",
-                error=f"Please complete all positions: {', '.join(missing_positions)}"
+        # Check if session is expired
+        if session.expires_at < datetime.utcnow():
+            session.status = "EXPIRED"
+            db.commit()
+            logger.warning(f"Session expired: {request.session_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Liveness detection session has expired"
             )
         
-        # Complete liveness verification
-        center_data = {
-            'success': True,
-            'embedding': json.loads(session.center_embedding)
-        }
-        left_data = {
-            'success': True,
-            'embedding': json.loads(session.left_embedding)
-        }
-        right_data = {
-            'success': True,
-            'embedding': json.loads(session.right_embedding)
-        }
-        
-        verification_result = liveness_detection_engine.complete_liveness_verification(
-            center_data, left_data, right_data
-        )
-        
-        if verification_result['success']:
-            # Update session with final results
-            session.liveness_score = verification_result['liveness_score']
-            session.movement_verified = verification_result['movement_verified']
-            session.final_embedding = json.dumps(verification_result['final_embedding'])
+        # Determine completion only if all positions verified true
+        all_verified = bool(session.center_verified and session.left_verified and session.right_verified)
+        if all_verified:
             session.status = "COMPLETED"
-            session.completed_at = datetime.utcnow()
-            db.commit()
-            
-            logger.info(f"Liveness verification completed successfully for session {request.session_id}")
-            
-            return LivenessVerificationResponse(
-                success=True,
-                message="Liveness verification completed successfully",
-                liveness_score=verification_result['liveness_score'],
-                movement_verified=verification_result['movement_verified'],
-                final_embedding=json.dumps(verification_result['final_embedding'])
-            )
+            # Choose final embedding preference: center > left > right
+            final_embedding = session.center_embedding or session.left_embedding or session.right_embedding
+            session.final_embedding = final_embedding
+            # Persist to student if available
+            if session.student_id and final_embedding:
+                student = db.query(Student).filter(Student.id == session.student_id).first()
+                if student:
+                    student.embedding_vector = final_embedding
+                    student.liveness_verified = True
+                    student.liveness_verification_date = datetime.utcnow()
+                    student.liveness_confidence_score = session.liveness_score or 0.0
+                    db.add(student)
+                    logger.info(f"Embeddings saved for Student {student.id}; liveness verified")
+                    # Reload known faces in recognition system
+                    try:
+                        students = db.query(Student).filter(Student.embedding_vector.isnot(None)).all()
+                        students_data = [
+                            { 'id': s.id, 'embedding_vector': s.embedding_vector }
+                            for s in students
+                        ]
+                        face_recognition_system.load_known_faces(students_data)
+                    except Exception as e:
+                        logger.warning(f"Failed reloading known faces after liveness verify: {e}")
         else:
-            # Mark session as failed
             session.status = "FAILED"
-            session.error_message = verification_result['error']
-            session.completed_at = datetime.utcnow()
-            db.commit()
-            
-            logger.warning(f"Liveness verification failed for session {request.session_id}: {verification_result['error']}")
-            
-            return LivenessVerificationResponse(
-                success=False,
-                message="Liveness verification failed",
-                error=verification_result['error']
-            )
+        db.commit()
+
+        logger.info(f"Session verification result: {session.status} (score: {session.liveness_score})")
+
+        return LivenessVerificationResponse(
+            success=True,
+            message="Liveness verification completed",
+            liveness_score=session.liveness_score or 0.0,
+            movement_verified=all_verified,
+            final_embedding=session.final_embedding,
+            error=None
+        )
         
     except HTTPException:
         raise
@@ -272,73 +381,78 @@ async def verify_liveness_completion(
 
 @router.post("/register-student", response_model=APIResponse)
 async def register_student_with_liveness(
-    student_data: StudentRegistrationWithLiveness,
+    request: StudentRegistrationWithLiveness,
     current_admin: str = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Register a new student using completed liveness detection"""
+    """Complete student registration after successful liveness detection"""
     try:
-        # Check if student with roll number already exists
-        existing_student = db.query(Student).filter(Student.roll_number == student_data.roll_number).first()
-        if existing_student:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Student with this roll number already exists"
-            )
+        logger.info(f"POST /api/v1/liveness/register-student by user '{current_admin}' - Completing registration for session {request.session_id}")
         
-        # Get completed liveness session
+        # Get the completed liveness session
         session = db.query(LivenessDetectionSession).filter(
-            LivenessDetectionSession.session_id == student_data.session_id,
+            LivenessDetectionSession.session_id == request.session_id,
             LivenessDetectionSession.status == "COMPLETED"
         ).first()
         
         if not session:
+            logger.warning(f"Completed liveness session not found: {request.session_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Completed liveness detection session not found"
             )
         
-        # Create student with liveness verification
+        if not session.final_embedding:
+            logger.error(f"No final embedding found in session {request.session_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No embeddings found in liveness session"
+            )
+        
+        # Create the student record
+        from app.models import Student
         student = Student(
-            name=student_data.name,
-            roll_number=student_data.roll_number,
+            name=request.name,
+            roll_number=request.roll_number,
             embedding_vector=session.final_embedding,
             liveness_verified=True,
-            liveness_verification_date=session.completed_at,
-            liveness_confidence_score=session.liveness_score
+            liveness_verification_date=datetime.utcnow(),
+            liveness_confidence_score=session.liveness_score or 0.0
         )
         
         db.add(student)
         db.commit()
         db.refresh(student)
         
-        # Update session with student reference
+        # Update session with student_id
         session.student_id = student.id
         db.commit()
         
-        logger.info(f"Student {student.name} registered successfully with liveness verification")
+        logger.info(f"Student registration completed: ID={student.id}, Name={student.name}, Embeddings saved")
         
         return {
             "success": True,
-            "message": f"Student {student.name} registered successfully with liveness verification",
+            "message": "Student registration completed successfully",
             "data": {
                 "student_id": student.id,
-                "liveness_score": session.liveness_score,
-                "verification_date": session.completed_at.isoformat()
+                "name": student.name,
+                "roll_number": student.roll_number,
+                "liveness_verified": True,
+                "embedding_saved": True
             }
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error registering student with liveness: {e}")
+        logger.error(f"Error completing student registration: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error registering student: {str(e)}"
+            detail=f"Error completing student registration: {str(e)}"
         )
 
 
-@router.get("/session/{session_id}", response_model=LivenessSessionSchema)
+@router.get("/session/{session_id}", response_model=APIResponse)
 async def get_liveness_session(
     session_id: str,
     current_admin: str = Depends(get_current_admin),
@@ -346,22 +460,36 @@ async def get_liveness_session(
 ):
     """Get liveness detection session details"""
     try:
+        logger.info(f"GET /api/v1/liveness/session/{session_id} by user '{current_admin}'")
+        
         session = db.query(LivenessDetectionSession).filter(
             LivenessDetectionSession.session_id == session_id
         ).first()
         
         if not session:
+            logger.warning(f"Session not found: {session_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Liveness detection session not found"
             )
         
-        return session
+        logger.info(f"Retrieved session: {session_id} (status: {session.status})")
+        
+        return {
+            "success": True,
+            "message": "Session retrieved successfully",
+            "data": {
+                "session_id": session.session_id,
+                "status": session.status,
+                "liveness_score": session.liveness_score,
+                "expires_at": session.expires_at.isoformat() if session.expires_at else None
+            }
+        }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting liveness session {session_id}: {e}")
+        logger.error(f"Error retrieving liveness session: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving liveness session: {str(e)}"

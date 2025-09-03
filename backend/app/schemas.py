@@ -192,9 +192,15 @@ class LivenessDetectionResponse(BaseModel):
     success: bool
     message: str
     position: Optional[str] = None
-    verified: Optional[bool] = None
-    liveness_score: Optional[float] = None
+    is_live: Optional[bool] = None
+    confidence_score: Optional[float] = None
     error: Optional[str] = None
+    # New fields for completion status
+    session_completed: Optional[bool] = None
+    liveness_score: Optional[float] = None
+    movement_verified: Optional[bool] = None
+    final_embedding_saved: Optional[bool] = None
+    student_id: Optional[int] = None
 
 
 class LivenessVerificationRequest(BaseModel):
@@ -207,6 +213,7 @@ class LivenessVerificationResponse(BaseModel):
     liveness_score: Optional[float] = None
     movement_verified: Optional[bool] = None
     final_embedding: Optional[str] = None
+    student_id: Optional[int] = None
     error: Optional[str] = None
 
 
