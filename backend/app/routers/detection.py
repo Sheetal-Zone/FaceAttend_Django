@@ -63,11 +63,14 @@ async def start_face_detection(
 
 @router.post("/stop", response_model=APIResponse)
 async def stop_face_detection(
-    camera_url: str,
+    payload: Dict,
     current_admin: str = Depends(get_current_admin)
 ):
     """Stop face detection for a specific camera"""
     try:
+        camera_url = payload.get('camera_url', '')
+        if not camera_url:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="camera_url is required")
         camera_manager.stop_camera(camera_url)
         
         return {
@@ -255,11 +258,12 @@ async def start_laptop_camera_detection(
 
 @router.post("/laptop-camera/stop", response_model=APIResponse)
 async def stop_laptop_camera_detection(
-    camera_index: int = 0,
+    payload: Dict,
     current_admin: str = Depends(get_current_admin)
 ):
     """Stop laptop camera detection for a specific camera index"""
     try:
+        camera_index = int(payload.get('camera_index', 0))
         if hasattr(router, 'laptop_processors') and camera_index in router.laptop_processors:
             processor = router.laptop_processors[camera_index]
             processor.stop()
@@ -311,12 +315,13 @@ async def get_laptop_camera_info(
 
 @router.post("/laptop-camera/switch", response_model=APIResponse)
 async def switch_laptop_camera(
-    camera_index: int,
+    payload: Dict,
     current_admin: str = Depends(get_current_admin)
 ):
     """Switch to a different laptop camera index"""
     try:
         if hasattr(router, 'laptop_processors'):
+            camera_index = int(payload.get('camera_index'))
             # Find any running processor
             for idx, processor in router.laptop_processors.items():
                 if processor.is_running:

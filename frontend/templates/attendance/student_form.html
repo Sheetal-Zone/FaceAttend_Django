@@ -485,9 +485,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 	});
 });
 
-function startLivenessDetection() {
+async function startLivenessDetection() {
 	// Create liveness session
-	createLivenessSession().then(sessionId => {
+	await createLivenessSession().then(sessionId => {
 		if (sessionId) {
 			currentSessionId = sessionId;
 			attendanceMarked = false;
@@ -639,8 +639,16 @@ function processFrame() {
 	canvas.width = video.videoWidth;
 	canvas.height = video.videoHeight;
 	
-	// Draw video frame to canvas
-	context.drawImage(video, 0, 0, canvas.width, canvas.height);
+	// Draw video frame to canvas (un-mirror front camera so left/right are correct)
+	try {
+		context.save();
+		context.translate(canvas.width, 0);
+		context.scale(-1, 1);
+		context.drawImage(video, 0, 0, canvas.width, canvas.height);
+		context.restore();
+	} catch (e) {
+		context.drawImage(video, 0, 0, canvas.width, canvas.height);
+	}
 	
 	console.log('Processing frame for position:', currentStep);
 	
@@ -692,26 +700,26 @@ function sendFrameToServer(frameData) {
 		console.log('Liveness detection result:', data);
 		if (data.success) {
 			capturedFrames[currentStep] = data;
-			markStepComplete(currentStep);
+			const pose = data.detected_pose || null;
+			// Only tick UI when detected pose matches current step
+			if (pose === currentStep || (currentStep === 'center' && pose === 'center')) {
+				markStepComplete(currentStep);
+			}
 			
-			// Check if liveness detection passed
-			if (data.is_live && data.confidence_score > 0.7) {
-				// Check if session is completed (all 3 steps done)
+			// Advance only when is_live AND pose matches expected step
+			if (data.is_live && (pose === currentStep || (currentStep === 'center' && pose === 'center'))) {
 				if (data.session_completed) {
 					console.log('Liveness detection session completed successfully!');
 					completeStudentRegistration();
-					return; // Stop processing
+					return;
 				}
-				
-				// Move to next step
 				moveToNextStep();
 			} else {
-				console.log('Liveness detection failed, retrying...');
-				setTimeout(processFrame, 1000);
+				console.log('Liveness detection not satisfied or wrong pose, retrying...');
+				setTimeout(processFrame, 700);
 			}
 		} else {
 			console.error('Frame processing failed:', data.message);
-			// Retry after a short delay
 			setTimeout(processFrame, 1000);
 		}
 	})
@@ -758,6 +766,20 @@ function updateStep(step) {
 			progressBar.style.width = '100%';
 			break;
 	}
+}
+
+// Update progress bar safely
+function updateProgress(percent) {
+    try {
+        const progressBar = document.getElementById('livenessProgress');
+        if (progressBar) {
+            const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
+            progressBar.style.width = clamped + '%';
+            progressBar.setAttribute('aria-valuenow', String(clamped));
+        }
+    } catch (e) {
+        console.warn('updateProgress failed:', e);
+    }
 }
 
 function markStepComplete(step) {

@@ -130,6 +130,18 @@
 
 {% block extra_js %}
 <script>
+    // FastAPI base resolution (prefer 8001)
+    let API_BASE = 'http://localhost:8001';
+    async function resolveApiBase() {
+        const candidates = ['http://localhost:8001', 'http://127.0.0.1:8001'];
+        for (const base of candidates) {
+            try {
+                const res = await fetch(base + '/health');
+                if (res.ok) { API_BASE = base; return base; }
+            } catch (e) {}
+        }
+        return API_BASE;
+    }
     // Camera management functions
     function startCamera(cameraId) {
         // Implementation for starting external cameras
@@ -146,8 +158,9 @@
     // Laptop camera functions
     async function startLaptopCamera() {
         try {
+            await resolveApiBase();
             // Start FastAPI laptop camera processor
-            const response = await fetch('/api/v1/detection/laptop-camera/start', {
+            const response = await fetch(`${API_BASE}/api/v1/detection/laptop-camera/start`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -174,8 +187,9 @@
 
     async function stopLaptopCamera() {
         try {
+            await resolveApiBase();
             // Stop FastAPI laptop camera processor
-            const response = await fetch('/api/v1/detection/laptop-camera/stop', {
+            const response = await fetch(`${API_BASE}/api/v1/detection/laptop-camera/stop`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

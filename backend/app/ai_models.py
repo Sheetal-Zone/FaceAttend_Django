@@ -416,23 +416,27 @@ class RealLivenessDetectionSystem:
 
             def evaluate_expected_pose(yaw_norm: float, expected: str) -> (bool, float, str):
                 # thresholds tuned empirically; positive yaw_norm => head turned right (from camera perspective)
-                center_thresh = 0.15
-                side_thresh = 0.25
+                # Map normalized yaw proxy to degrees approximately
+                # Empirical: side_thresh_deg ~ 15°, center_thresh_deg ~ 5°
+                center_thresh_deg = 5.0
+                side_thresh_deg = 15.0
+                # Convert yaw_norm to a pseudo-degree scale (scale factor ~ 40 deg span)
+                yaw_deg = float(yaw_norm * 40.0)
                 detected = 'center'
-                if yaw_norm > side_thresh:
+                if yaw_deg > side_thresh_deg:
                     detected = 'right'
-                elif yaw_norm < -side_thresh:
+                elif yaw_deg < -side_thresh_deg:
                     detected = 'left'
                 # Match expected
                 if expected == 'center':
-                    ok = abs(yaw_norm) <= center_thresh
-                    conf = max(0.0, 1.0 - abs(yaw_norm) / (center_thresh + 1e-6))
+                    ok = abs(yaw_deg) <= center_thresh_deg
+                    conf = max(0.0, 1.0 - abs(yaw_deg) / (center_thresh_deg + 1e-6))
                 elif expected == 'left':
-                    ok = yaw_norm < -side_thresh
-                    conf = min(1.0, max(0.0, (-yaw_norm - side_thresh) / (0.5)))
+                    ok = yaw_deg < -side_thresh_deg
+                    conf = min(1.0, max(0.0, (-yaw_deg - side_thresh_deg) / 20.0))
                 elif expected == 'right':
-                    ok = yaw_norm > side_thresh
-                    conf = min(1.0, max(0.0, (yaw_norm - side_thresh) / (0.5)))
+                    ok = yaw_deg > side_thresh_deg
+                    conf = min(1.0, max(0.0, (yaw_deg - side_thresh_deg) / 20.0))
                 else:
                     ok = False
                     conf = 0.0

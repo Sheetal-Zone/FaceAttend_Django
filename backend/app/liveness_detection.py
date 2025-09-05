@@ -96,14 +96,14 @@ class RealLivenessDetectionEngine:
             # Movement verification logic:
             # - Center-left and center-right should be similar (same person)
             # - Left-right should be different (different head positions)
-            # - All should be above threshold for same person
+            # Relax thresholds for typical webcam variability
             person_similarity = min(center_left_similarity, center_right_similarity)
             movement_difference = 1.0 - left_right_similarity  # Higher difference = better movement
             
             # Calculate overall movement verification score
-            if person_similarity > 0.7 and movement_difference > 0.1:
+            if person_similarity > 0.6 and movement_difference > 0.05:
                 movement_score = (person_similarity + movement_difference) / 2
-                movement_verified = movement_score > 0.6
+                movement_verified = movement_score > 0.5
             else:
                 movement_score = 0.0
                 movement_verified = False

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float, Boolean, LargeBinary
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -21,8 +21,11 @@ class Student(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     roll_number = Column(String(50), unique=True, nullable=False, index=True)
-    # Removed photo_url field
-    embedding_vector = Column(Text, nullable=True)  # Store as JSON string
+    # New fields per updated schema (kept old for backward-compat)
+    roll_no = Column(String(50), unique=False, nullable=True, index=True)
+    face_embedding = Column(LargeBinary, nullable=True)
+    # Legacy field retained to avoid breaking existing data paths
+    embedding_vector = Column(Text, nullable=True)  # JSON string (legacy)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
@@ -79,7 +82,7 @@ Student.liveness_sessions = relationship("LivenessDetectionSession", back_popula
 
 
 class Attendance(Base):
-    __tablename__ = "attendance"
+    __tablename__ = "attendance_log"
     
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)

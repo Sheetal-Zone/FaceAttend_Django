@@ -1,5 +1,96 @@
 # Face Attendance System
 
+## Overview
+End-to-end face attendance solution combining Django (frontend/admin) and FastAPI (AI backend). Supports student registration with liveness detection (embeddings only) and live detection for attendance marking from USB/RTSP cameras.
+
+## Tech Stack
+- Backend: FastAPI (Python)
+- Frontend/Admin: Django
+- AI: InsightFace (embeddings), YOLO/OpenCV (detection fallback), NumPy, OpenCV
+- Realtime: WebSocket (status/logs)
+- DB: SQLAlchemy to SQLite (default) or PostgreSQL
+
+## Features
+- Liveness detection with head pose (center/left/right) gating
+- Store embeddings in `students.face_embedding` (binary)
+- Live camera detection; cosine similarity matching; attendance logging
+- Auto-reconnect for cameras; robust error logs
+
+## Database Schema
+```
+students
+  id (int, pk)
+  name (str)
+  roll_number (str, unique)
+  face_embedding (bytes, nullable)
+  embedding_vector (json string, legacy)
+
+attendance_log
+  id (int, pk)
+  student_id (fk -> students.id)
+  timestamp (datetime, default now)
+  status (str, default "Present")
+```
+
+## Running the Project
+
+1) Create/activate a Python 3.11 env (venv311 included)
+
+2) Install requirements (if needed)
+```
+cd backend
+..\venv311\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+3) Start FastAPI (port 8001)
+```
+cd backend
+..\venv311\Scripts\python.exe start_fastapi.py
+```
+
+4) Start Django (port 8000)
+```
+cd backend
+..\venv311\Scripts\python.exe manage.py runserver 0.0.0.0:8000
+```
+
+## Workflow
+
+### Registration (Liveness Detection)
+1. Get FastAPI token (UI button on student form)
+2. Click “Start Liveness Detection”
+3. Complete steps: center (±5°), left (< -15°), right (> +15°)
+4. Backend extracts embeddings with InsightFace and saves to `students.face_embedding`
+5. UI shows: “Student embeddings captured and saved successfully” and stops camera
+
+Note: Attendance is NOT marked during registration.
+
+### Live Detection (Attendance)
+1. Start detection from UI (USB/RTSP)
+2. Backend extracts embeddings from frames and compares to DB
+3. If similarity > 0.7, mark attendance in `attendance_log`
+4. UI shows success banner and logs reflect recognition/attendance
+
+## API
+- Auth: `POST /api/v1/auth/login`
+- Liveness:
+  - `POST /api/v1/liveness/session`
+  - `POST /api/v1/liveness/detect`
+- Detection:
+  - `POST /api/v1/detection/start`
+  - `POST /api/v1/detection/stop`
+  - `POST /api/v1/detection/laptop-camera/start|stop`
+
+FastAPI runs at `http://localhost:8001` with CORS enabled for `*`.
+
+## Logs & Debugging
+- Backend logs print: camera start/stop, step detections, embeddings saved, recognition matches, attendance commits, and errors with stack traces.
+
+## Future Enhancements
+- Improve multi-face handling and region-of-interest tracking
+- Persist tokens and RBAC for multi-user admins
+- GPU acceleration when available
+
 ## System Overview
 
 A comprehensive face attendance system with liveness detection and real-time face recognition capabilities.

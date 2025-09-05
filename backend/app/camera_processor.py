@@ -49,11 +49,20 @@ class CameraProcessor:
     def _process_stream(self):
         """Main processing loop for camera stream"""
         try:
-            # Open camera stream
+            # Open camera stream with reconnect logic
+            open_attempts = 0
             self.cap = cv2.VideoCapture(self.camera_url)
-            
+            while not self.cap.isOpened() and open_attempts < 5 and self.is_running:
+                logger.warning(f"Failed to open camera stream: {self.camera_url}. Retrying ({open_attempts+1}/5)...")
+                time.sleep(1.0)
+                try:
+                    self.cap.release()
+                except Exception:
+                    pass
+                self.cap = cv2.VideoCapture(self.camera_url)
+                open_attempts += 1
             if not self.cap.isOpened():
-                logger.error(f"Failed to open camera stream: {self.camera_url}")
+                logger.error(f"Failed to open camera stream after retries: {self.camera_url}")
                 return
             
             logger.info(f"Successfully opened camera stream: {self.camera_url}")
@@ -65,8 +74,24 @@ class CameraProcessor:
             while self.is_running:
                 try:
                     ret, frame = self.cap.read()
-                    if not ret:
+                    if not ret or frame is None:
                         logger.warning(f"Failed to read frame from camera {self.camera_url}")
+                        # attempt to reconnect non-intrusively
+                        try:
+                            self.cap.release()
+                        except Exception:
+                            pass
+                        self.cap = cv2.VideoCapture(self.camera_url)
+                        if not self.cap.isOpened():
+                            logger.error(f"Camera {self.camera_url} disconnected. Attempting periodic reconnects while keeping loop alive.")
+                            reconnect_attempts = 0
+                            while self.is_running and reconnect_attempts < 10 and not self.cap.isOpened():
+                                time.sleep(1.0)
+                                self.cap = cv2.VideoCapture(self.camera_url)
+                                reconnect_attempts += 1
+                            if not self.cap.isOpened():
+                                time.sleep(2.0)
+                                continue
                         time.sleep(0.1)
                         continue
                     
@@ -167,7 +192,7 @@ class CameraProcessor:
             db = SessionLocal()
             current_time = time.time()
             
-            # Only mark attendance once per minute per student
+            # Only mark attendance once per minute window globally; still ensure per-student dedupe below
             if current_time - self.last_processing_time < 60:
                 return
             
@@ -176,10 +201,13 @@ class CameraProcessor:
                 confidence = student_data['confidence']
                 
                 # Check if attendance already marked for today
-                today = time.strftime('%Y-%m-%d')
+                from sqlalchemy import func
+                from datetime import date
+                today = date.today()
+                # Prevent duplicate per day per student
                 existing_attendance = db.query(Attendance).filter(
                     Attendance.student_id == student_id,
-                    Attendance.timestamp >= today
+                    func.date(Attendance.timestamp) == today
                 ).first()
                 
                 if not existing_attendance:
@@ -191,9 +219,11 @@ class CameraProcessor:
                         camera_location=self.camera_location
                     )
                     db.add(attendance)
+                    logger.info(f"Attendance queued for save student_id={student_id} confidence={confidence:.3f} camera={self.camera_location}")
                     logger.info(f"Marked attendance for student {student_id}")
             
             db.commit()
+            logger.info("Attendance commit completed for recognized students batch")
             self.last_processing_time = current_time
             db.close()
             

@@ -178,24 +178,20 @@ async def detect_liveness(
         detected_pose = result.get("detected_pose")
         logger.info(f"Liveness step '{position}' result: ok={is_live}, conf={confidence:.3f}, detected_pose={detected_pose}")
 
-        if position == "center":
+        # Mark step verified only if detected pose matches expected
+        if position == "center" and detected_pose == "center":
             session.center_verified = is_live
-        elif position == "left":
+        elif position == "left" and detected_pose == "left":
             session.left_verified = is_live
-        elif position == "right":
+        elif position == "right" and detected_pose == "right":
             session.right_verified = is_live
 
-        # Check if all positions are completed
-        all_positions_completed = (
-            session.center_verified and 
-            session.left_verified and 
-            session.right_verified and
-            session.center_embedding and 
-            session.left_embedding and 
-            session.right_embedding
+        # Check if all required data (embeddings) are present
+        embeddings_captured = bool(
+            session.center_embedding and session.left_embedding and session.right_embedding
         )
         
-        if all_positions_completed:
+        if embeddings_captured:
             # All positions completed - finalize the session
             logger.info(f"All liveness positions completed for session {request.session_id}, finalizing...")
             
@@ -225,6 +221,13 @@ async def detect_liveness(
                     if session.student_id:
                         student = db.query(Student).filter(Student.id == session.student_id).first()
                         if student:
+                            # Persist binary embedding as well
+                            try:
+                                import json, numpy as np
+                                emb = np.array(json.loads(session.final_embedding), dtype=np.float32)
+                                student.face_embedding = emb.tobytes()
+                            except Exception:
+                                pass
                             student.embedding_vector = session.final_embedding
                             student.liveness_verified = True
                             student.liveness_verification_date = datetime.utcnow()
@@ -269,7 +272,8 @@ async def detect_liveness(
             "message": "Liveness detection processed",
             "position": position,
             "is_live": result.get("is_live", False),
-            "confidence_score": result.get("confidence", 0.0)
+            "confidence_score": result.get("confidence", 0.0),
+            "detected_pose": result.get("detected_pose")
         }
         
         # Add completion information if session is completed
@@ -346,6 +350,7 @@ async def verify_liveness_completion(
                     logger.info(f"Embeddings saved for Student {student.id}; liveness verified")
                     # Reload known faces in recognition system
                     try:
+                        from app.ai_models import face_recognition_system
                         students = db.query(Student).filter(Student.embedding_vector.isnot(None)).all()
                         students_data = [
                             { 'id': s.id, 'embedding_vector': s.embedding_vector }

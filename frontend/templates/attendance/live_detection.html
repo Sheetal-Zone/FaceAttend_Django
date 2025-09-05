@@ -198,7 +198,7 @@ class DetectionMonitor {
     }
     
     setupWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const protocol = 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/detection/`;
         
         this.websocket = new WebSocket(wsUrl);
@@ -417,7 +417,8 @@ class DetectionMonitor {
             this.laptopVideoElement.srcObject = stream;
             
             // Start FastAPI laptop camera processor
-            const response = await fetch('/api/v1/detection/laptop-camera/start', {
+            const apiBase = 'http://localhost:8001';
+            const response = await fetch(`${apiBase}/api/v1/detection/laptop-camera/start`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -448,7 +449,8 @@ class DetectionMonitor {
     async stopLaptopCamera() {
         try {
             // Stop FastAPI laptop camera processor
-            const response = await fetch('/api/v1/detection/laptop-camera/stop', {
+            const apiBase = 'http://localhost:8001';
+            const response = await fetch(`${apiBase}/api/v1/detection/laptop-camera/stop`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -504,7 +506,8 @@ class DetectionMonitor {
                     const formData = new FormData();
                     formData.append('frame', blob);
                     
-                    const response = await fetch('/api/v1/detection/process-frame', {
+                    const apiBase = 'http://localhost:8001';
+                    const response = await fetch(`${apiBase}/api/v1/detection/process-frame`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${this.getAccessToken()}`
