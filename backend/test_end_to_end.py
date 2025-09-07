@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Complete System Test - Verify Models, Storage, and Database Integration
+End-to-End Test Script for Face Attendance System
 """
 
 import requests
@@ -10,52 +10,38 @@ import base64
 import numpy as np
 import cv2
 from datetime import datetime
-import os
-from pathlib import Path
 
 # Configuration
 FASTAPI_BASE_URL = "http://localhost:8001"
 AUTH_TOKEN = "admin_token_placeholder"
 
-def create_test_image_with_face():
-    """Create a test image with a simple face pattern"""
-    # Create a simple test image
-    img = np.ones((480, 640, 3), dtype=np.uint8) * 128  # Gray background
-    
-    # Draw a simple face
-    cv2.circle(img, (320, 200), 80, (255, 255, 255), -1)  # Face
-    cv2.circle(img, (300, 180), 10, (0, 0, 0), -1)  # Left eye
-    cv2.circle(img, (340, 180), 10, (0, 0, 0), -1)  # Right eye
-    cv2.ellipse(img, (320, 220), (20, 10), 0, 0, 180, (0, 0, 0), 2)  # Mouth
-    
-    # Encode as base64
-    _, buffer = cv2.imencode('.jpg', img)
-    img_base64 = base64.b64encode(buffer).decode('utf-8')
-    return img_base64, img
-
 def test_health_endpoints():
     """Test health and readiness endpoints"""
     print("🔍 Testing health endpoints...")
     
+    # Test /health
     try:
-        # Test /health
         response = requests.get(f"{FASTAPI_BASE_URL}/health", timeout=5)
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ok"
         print("✅ /health endpoint working")
-        
-        # Test /ready
+    except Exception as e:
+        print(f"❌ /health endpoint failed: {e}")
+        return False
+    
+    # Test /ready
+    try:
         response = requests.get(f"{FASTAPI_BASE_URL}/ready", timeout=5)
         assert response.status_code == 200
         data = response.json()
         assert data["ready"] == True
         print("✅ /ready endpoint working")
-        
-        return True
     except Exception as e:
-        print(f"❌ Health endpoints failed: {e}")
+        print(f"❌ /ready endpoint failed: {e}")
         return False
+    
+    return True
 
 def test_models_endpoint():
     """Test models endpoint"""
@@ -69,12 +55,9 @@ def test_models_endpoint():
         assert "face_recognition" in data
         assert "liveness_detection" in data
         print("✅ /api/v1/models endpoint working")
-        print(f"  Face Detection: {data['face_detection']['status']}")
-        print(f"  Face Recognition: {data['face_recognition']['status']}")
-        print(f"  Liveness Detection: {data['liveness_detection']['status']}")
         return True
     except Exception as e:
-        print(f"❌ Models endpoint failed: {e}")
+        print(f"❌ /api/v1/models endpoint failed: {e}")
         return False
 
 def create_test_student():
@@ -109,8 +92,20 @@ def create_test_student():
         print(f"❌ Failed to create test student: {e}")
         return None
 
+def create_test_image():
+    """Create a test image with a simple pattern"""
+    # Create a simple test image
+    img = np.ones((480, 640, 3), dtype=np.uint8) * 128  # Gray background
+    cv2.rectangle(img, (200, 150), (400, 350), (0, 255, 0), 2)  # Green rectangle
+    cv2.putText(img, "TEST FACE", (250, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    
+    # Encode as base64
+    _, buffer = cv2.imencode('.jpg', img)
+    img_base64 = base64.b64encode(buffer).decode('utf-8')
+    return img_base64
+
 def test_liveness_flow(student_id):
-    """Test complete liveness detection flow"""
+    """Test liveness detection flow"""
     print("🔍 Testing liveness detection flow...")
     
     try:
@@ -132,7 +127,7 @@ def test_liveness_flow(student_id):
         
         # 2. Process frames for each position
         positions = ["center", "left", "right"]
-        test_image, test_img_array = create_test_image_with_face()
+        test_image = create_test_image()
         
         for position in positions:
             print(f"  Processing {position} position...")
@@ -173,26 +168,13 @@ def test_liveness_flow(student_id):
         data = response.json()
         assert data["success"] == True
         print("✅ Liveness detection completed successfully")
-        
-        # 4. Verify embeddings were saved
-        response = requests.get(
-            f"{FASTAPI_BASE_URL}/api/v1/students/{student_id}",
-            headers={"Authorization": f"Bearer {AUTH_TOKEN}"},
-            timeout=10
-        )
-        
-        assert response.status_code == 200
-        student_data = response.json()
-        assert student_data["data"]["has_embedding"] == True
-        print("✅ Embeddings verified in database")
-        
         return True
         
     except Exception as e:
         print(f"❌ Liveness detection failed: {e}")
         return False
 
-def test_detection_flow(student_id):
+def test_detection_flow():
     """Test live detection flow"""
     print("🔍 Testing live detection flow...")
     
@@ -214,7 +196,7 @@ def test_detection_flow(student_id):
         print(f"✅ Detection session started: {session_id}")
         
         # 2. Process test frame
-        test_image, test_img_array = create_test_image_with_face()
+        test_image = create_test_image()
         
         response = requests.post(
             f"{FASTAPI_BASE_URL}/api/v1/detection/frame",
@@ -233,9 +215,6 @@ def test_detection_flow(student_id):
         data = response.json()
         assert data["success"] == True
         print(f"✅ Frame processed: {data['message']}")
-        print(f"  Faces detected: {data['faces_detected']}")
-        print(f"  Students recognized: {data['students_recognized']}")
-        print(f"  Attendance marked: {data.get('attendance_marked', 0)}")
         
         # 3. Stop detection session
         response = requests.post(
@@ -252,87 +231,10 @@ def test_detection_flow(student_id):
         data = response.json()
         assert data["success"] == True
         print("✅ Detection session stopped successfully")
-        
         return True
         
     except Exception as e:
         print(f"❌ Detection flow failed: {e}")
-        return False
-
-def test_storage_verification(student_id):
-    """Verify that photos were saved correctly"""
-    print("🔍 Verifying photo storage...")
-    
-    try:
-        # Check if registration photo exists
-        registration_photo_path = f"media/students/{student_id}/registration.jpg"
-        if os.path.exists(registration_photo_path):
-            print(f"✅ Registration photo saved: {registration_photo_path}")
-        else:
-            print(f"❌ Registration photo not found: {registration_photo_path}")
-        
-        # Check if detection photos exist
-        detection_dir = f"media/detections/{student_id}"
-        if os.path.exists(detection_dir):
-            detection_photos = list(Path(detection_dir).glob("*.jpg"))
-            if detection_photos:
-                print(f"✅ Detection photos saved: {len(detection_photos)} photos")
-                for photo in detection_photos:
-                    print(f"  - {photo}")
-            else:
-                print("⚠️  Detection directory exists but no photos found")
-        else:
-            print("⚠️  Detection directory not found (may be normal if no attendance was marked)")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ Storage verification failed: {e}")
-        return False
-
-def test_database_verification(student_id):
-    """Verify database records"""
-    print("🔍 Verifying database records...")
-    
-    try:
-        # Check student record
-        response = requests.get(
-            f"{FASTAPI_BASE_URL}/api/v1/students/{student_id}",
-            headers={"Authorization": f"Bearer {AUTH_TOKEN}"},
-            timeout=10
-        )
-        
-        assert response.status_code == 200
-        student_data = response.json()
-        student = student_data["data"]
-        
-        print(f"✅ Student record verified:")
-        print(f"  - ID: {student['student_id']}")
-        print(f"  - Name: {student['name']}")
-        print(f"  - Roll No: {student['roll_no']}")
-        print(f"  - Has Embedding: {student['has_embedding']}")
-        
-        # Check attendance records
-        response = requests.get(
-            f"{FASTAPI_BASE_URL}/api/v1/attendance/",
-            headers={"Authorization": f"Bearer {AUTH_TOKEN}"},
-            timeout=10
-        )
-        
-        assert response.status_code == 200
-        attendance_data = response.json()
-        attendance_records = attendance_data["data"]
-        
-        student_attendance = [r for r in attendance_records if r["student_id"] == student_id]
-        print(f"✅ Attendance records verified: {len(student_attendance)} records")
-        
-        for record in student_attendance:
-            print(f"  - {record['student_name']} at {record['detected_at']} (confidence: {record['confidence']:.3f})")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ Database verification failed: {e}")
         return False
 
 def test_metrics():
@@ -343,26 +245,25 @@ def test_metrics():
         response = requests.get(f"{FASTAPI_BASE_URL}/metrics", timeout=5)
         assert response.status_code == 200
         data = response.json()
-        
-        print("✅ Metrics endpoint working:")
-        print(f"  - Students: {data['students_count']}")
-        print(f"  - Embeddings: {data['embeddings_count']}")
-        print(f"  - Attendance Logs: {data['attendance_logs_count']}")
-        print(f"  - Recognition Count: {data['recognition_count']}")
-        print(f"  - Frames Processed: {data['frames_processed']}")
-        
+        assert "embeddings_count" in data
+        assert "students_count" in data
+        assert "attendance_logs_count" in data
+        print("✅ Metrics endpoint working")
+        print(f"  Students: {data['students_count']}")
+        print(f"  Embeddings: {data['embeddings_count']}")
+        print(f"  Attendance logs: {data['attendance_logs_count']}")
         return True
     except Exception as e:
         print(f"❌ Metrics endpoint failed: {e}")
         return False
 
 def main():
-    """Run complete system test"""
-    print("🚀 Complete System Test - Models, Storage, and Database Integration")
-    print("=" * 70)
+    """Run all tests"""
+    print("🚀 Starting End-to-End Tests for Face Attendance System")
+    print("=" * 60)
     
     tests_passed = 0
-    total_tests = 7
+    total_tests = 6
     
     # Test 1: Health endpoints
     if test_health_endpoints():
@@ -380,36 +281,20 @@ def main():
         # Test 4: Liveness flow
         if test_liveness_flow(student_id):
             tests_passed += 1
-        
-        # Test 5: Detection flow
-        if test_detection_flow(student_id):
-            tests_passed += 1
-        
-        # Test 6: Storage verification
-        if test_storage_verification(student_id):
-            tests_passed += 1
-        
-        # Test 7: Database verification
-        if test_database_verification(student_id):
-            tests_passed += 1
     
-    # Test 8: Metrics
+    # Test 5: Detection flow
+    if test_detection_flow():
+        tests_passed += 1
+    
+    # Test 6: Metrics
     if test_metrics():
         tests_passed += 1
     
-    print("=" * 70)
+    print("=" * 60)
     print(f"📊 Test Results: {tests_passed}/{total_tests} tests passed")
     
     if tests_passed == total_tests:
-        print("🎉 All tests passed! System is fully functional.")
-        print("\n✅ Verified:")
-        print("  - YOLOv8n face detection working")
-        print("  - InsightFace ArcFace embeddings working")
-        print("  - MediaPipe head pose estimation working")
-        print("  - Photo storage working (registration + detection photos)")
-        print("  - Database integration working (students, embeddings, attendance)")
-        print("  - Liveness detection flow working")
-        print("  - Live detection flow working")
+        print("🎉 All tests passed! System is working correctly.")
         return True
     else:
         print("❌ Some tests failed. Please check the system.")

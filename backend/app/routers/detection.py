@@ -1,443 +1,274 @@
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
-from typing import List, Dict
-import json
-import asyncio
-from app.auth import get_current_admin
-from app.database import get_db
-from app.models import Student, DetectionLog
-from app.schemas import FaceDetectionRequest, FaceDetectionResponse, APIResponse
-from app.camera_processor import camera_manager
-from app.ai_models import face_recognition_system
+"""
+Live Detection Router - Attendance marking only
+"""
+
 import logging
+import time
+import uuid
+from datetime import datetime
+from typing import Dict, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+
+from app.database import get_db
+from app.models import Student, StudentEmbedding, AttendanceLog, DetectionLog
+from app.ai_models import face_recognition_system
+from app.config import settings
+from app.auth import get_current_admin
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/detection", tags=["Face Detection"])
+router = APIRouter()
 
+# In-memory session storage (use Redis in production)
+detection_sessions: Dict[str, Dict] = {}
 
-@router.post("/start", response_model=APIResponse)
-async def start_face_detection(
-    request: FaceDetectionRequest,
+class DetectionStartRequest(BaseModel):
+    camera_source: Optional[str] = "webcam"
+
+class DetectionStartResponse(BaseModel):
+    session_id: str
+    message: str
+
+class FrameData(BaseModel):
+    image_data: str  # Base64 encoded image
+    session_id: str
+
+class DetectionResponse(BaseModel):
+    success: bool
+    message: str
+    faces_detected: int = 0
+    students_recognized: int = 0
+    matches: List[Dict] = []
+    processing_time_ms: float = 0.0
+
+class DetectionStopRequest(BaseModel):
+    session_id: str
+
+@router.post("/start", response_model=DetectionStartResponse)
+async def start_detection(
+    request: DetectionStartRequest,
     current_admin: str = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Start real-time face detection from camera stream"""
+    """Start live detection session"""
     try:
-        # Initialize AI models if not already done
-        if not face_recognition_system.initialized:
-            face_recognition_system.initialize_models()
-            
-            # Load known faces
-            students = db.query(Student).all()
-            students_data = []
-            for student in students:
-                if student.embedding_vector:
-                    students_data.append({
-                        'id': student.id,
-                        'embedding_vector': student.embedding_vector
-                    })
-            face_recognition_system.load_known_faces(students_data)
+        session_id = str(uuid.uuid4())
         
-        # Start camera processing
-        camera_manager.start_camera(
-            camera_url=request.camera_url,
-            camera_location=request.camera_location or "Unknown"
-        )
-        
-        return {
-            "success": True,
-            "message": f"Face detection started for camera: {request.camera_url}",
-            "data": {
-                "camera_url": request.camera_url,
-                "camera_location": request.camera_location
-            }
+        # Initialize session
+        detection_sessions[session_id] = {
+            "started_at": datetime.utcnow(),
+            "camera_source": request.camera_source,
+            "frames_processed": 0,
+            "students_recognized": 0,
+            "attendance_marked": 0
         }
         
-    except Exception as e:
-        logger.error(f"Error starting face detection: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error starting face detection: {str(e)}"
-        )
-
-
-@router.post("/stop", response_model=APIResponse)
-async def stop_face_detection(
-    payload: Dict,
-    current_admin: str = Depends(get_current_admin)
-):
-    """Stop face detection for a specific camera"""
-    try:
-        camera_url = payload.get('camera_url', '')
-        if not camera_url:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="camera_url is required")
-        camera_manager.stop_camera(camera_url)
+        logger.info(f"Detection session started: {session_id} by {current_admin}")
         
-        return {
-            "success": True,
-            "message": f"Face detection stopped for camera: {camera_url}"
-        }
+        return DetectionStartResponse(
+            session_id=session_id,
+            message="Detection session started successfully"
+            )
         
     except Exception as e:
-        logger.error(f"Error stopping face detection: {e}")
+        logger.error(f"Error starting detection session: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error stopping face detection: {str(e)}"
+            detail=f"Failed to start detection session: {str(e)}"
         )
 
-
-@router.post("/stop-all", response_model=APIResponse)
-async def stop_all_face_detection(
-    current_admin: str = Depends(get_current_admin)
-):
-    """Stop all face detection processes"""
-    try:
-        camera_manager.stop_all_cameras()
-        
-        return {
-            "success": True,
-            "message": "All face detection processes stopped"
-        }
-        
-    except Exception as e:
-        logger.error(f"Error stopping all face detection: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error stopping face detection: {str(e)}"
-        )
-
-
-@router.get("/status", response_model=APIResponse)
-async def get_detection_status(
-    current_admin: str = Depends(get_current_admin)
-):
-    """Get status of all camera detection processes"""
-    try:
-        status = camera_manager.get_camera_status()
-        
-        return {
-            "success": True,
-            "message": "Detection status retrieved successfully",
-            "data": {
-                "cameras": status,
-                "total_cameras": len(status),
-                "active_cameras": len([c for c in status.values() if c['is_running']])
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting detection status: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving detection status: {str(e)}"
-        )
-
-
-@router.get("/logs", response_model=APIResponse)
-async def get_detection_logs(
-    limit: int = 100,
+@router.post("/frame", response_model=DetectionResponse)
+async def process_frame(
+    request: FrameData,
     current_admin: str = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Get recent detection logs"""
+    """Process detection frame and mark attendance"""
+    import base64
+    import cv2
+    import numpy as np
+    
+    start_time = time.time()
+    
     try:
-        logs = db.query(DetectionLog).order_by(DetectionLog.timestamp.desc()).limit(limit).all()
-        
-        log_list = []
-        for log in logs:
-            log_dict = {
-                "id": log.id,
-                "timestamp": log.timestamp,
-                "faces_detected": log.faces_detected,
-                "students_recognized": log.students_recognized,
-                "processing_time": log.processing_time,
-                "camera_location": log.camera_location,
-                "error_message": log.error_message
-            }
-            log_list.append(log_dict)
-        
-        return {
-            "success": True,
-            "message": "Detection logs retrieved successfully",
-            "data": {
-                "logs": log_list,
-                "total": len(log_list)
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting detection logs: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving detection logs: {str(e)}"
-        )
-
-
-# WebSocket for real-time detection updates
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            try:
-                await connection.send_text(message)
-            except:
-                # Remove disconnected clients
-                self.active_connections.remove(connection)
-
-
-manager = ConnectionManager()
-
-
-# Laptop Camera Endpoints
-@router.post("/laptop-camera/start", response_model=APIResponse)
-async def start_laptop_camera_detection(
-    camera_index: int = 0,
-    current_admin: str = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """Start real-time face detection from laptop camera"""
-    try:
-        # Initialize AI models if not already done
-        if not face_recognition_system.initialized:
-            face_recognition_system.initialize_models()
-            
-            # Load known faces
-            students = db.query(Student).all()
-            students_data = []
-            for student in students:
-                if student.embedding_vector:
-                    students_data.append({
-                        'id': student.id,
-                        'embedding_vector': student.embedding_vector
-                    })
-            face_recognition_system.load_known_faces(students_data)
-        
-        # Import here to avoid circular imports
-        from app.camera_processor import LaptopCameraProcessor
-        
-        # Create and start laptop camera processor
-        laptop_processor = LaptopCameraProcessor(camera_index=camera_index)
-        laptop_processor.start()
-        
-        # Store processor reference (you might want to add this to camera_manager)
-        # For now, we'll store it in a simple way
-        if not hasattr(router, 'laptop_processors'):
-            router.laptop_processors = {}
-        
-        router.laptop_processors[camera_index] = laptop_processor
-        
-        return {
-            "success": True,
-            "message": f"Laptop camera detection started for camera index: {camera_index}",
-            "data": {
-                "camera_index": camera_index,
-                "camera_location": "Laptop Camera",
-                "available_cameras": laptop_processor.available_cameras
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"Error starting laptop camera detection: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error starting laptop camera detection: {str(e)}"
-        )
-
-
-@router.post("/laptop-camera/stop", response_model=APIResponse)
-async def stop_laptop_camera_detection(
-    payload: Dict,
-    current_admin: str = Depends(get_current_admin)
-):
-    """Stop laptop camera detection for a specific camera index"""
-    try:
-        camera_index = int(payload.get('camera_index', 0))
-        if hasattr(router, 'laptop_processors') and camera_index in router.laptop_processors:
-            processor = router.laptop_processors[camera_index]
-            processor.stop()
-            del router.laptop_processors[camera_index]
-            
-            return {
-                "success": True,
-                "message": f"Laptop camera detection stopped for camera index: {camera_index}"
-            }
-        else:
+        # Validate session
+        if request.session_id not in detection_sessions:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No laptop camera processor found for index: {camera_index}"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid session ID"
             )
         
-    except Exception as e:
-        logger.error(f"Error stopping laptop camera detection: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error stopping laptop camera detection: {str(e)}"
-        )
-
-
-@router.get("/laptop-camera/info", response_model=APIResponse)
-async def get_laptop_camera_info(
-    current_admin: str = Depends(get_current_admin)
-):
-    """Get information about available laptop cameras"""
-    try:
-        from app.camera_processor import LaptopCameraProcessor
+        session = detection_sessions[request.session_id]
+        session["frames_processed"] += 1
         
-        # Create a temporary processor to get camera info
-        temp_processor = LaptopCameraProcessor()
-        camera_info = temp_processor.get_camera_info()
-        
-        return {
-            "success": True,
-            "message": "Laptop camera information retrieved",
-            "data": camera_info
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting laptop camera info: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting laptop camera info: {str(e)}"
-        )
-
-
-@router.post("/laptop-camera/switch", response_model=APIResponse)
-async def switch_laptop_camera(
-    payload: Dict,
-    current_admin: str = Depends(get_current_admin)
-):
-    """Switch to a different laptop camera index"""
-    try:
-        if hasattr(router, 'laptop_processors'):
-            camera_index = int(payload.get('camera_index'))
-            # Find any running processor
-            for idx, processor in router.laptop_processors.items():
-                if processor.is_running:
-                    if processor.switch_camera(camera_index):
-                        # Update the stored processor
-                        router.laptop_processors[camera_index] = processor
-                        if idx != camera_index:
-                            del router.laptop_processors[idx]
-                        
-                        return {
-                            "success": True,
-                            "message": f"Switched to laptop camera index: {camera_index}",
-                            "data": {
-                                "camera_index": camera_index,
-                                "camera_location": "Laptop Camera"
-                            }
-                        }
-                    else:
-                        raise HTTPException(
-                            status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"Failed to switch to camera index: {camera_index}"
-                        )
-            
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No running laptop camera processor found"
-            )
-        
-    except Exception as e:
-        logger.error(f"Error switching laptop camera: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error switching laptop camera: {str(e)}"
-        )
-
-
-@router.get("/laptop-camera/status", response_model=APIResponse)
-async def get_laptop_camera_status(
-    current_admin: str = Depends(get_current_admin)
-):
-    """Get status of all laptop camera processors"""
-    try:
-        status_data = {}
-        
-        if hasattr(router, 'laptop_processors'):
-            for idx, processor in router.laptop_processors.items():
-                status_data[idx] = {
-                    "running": processor.is_running,
-                    "camera_location": processor.camera_location,
-                    "frame_count": processor.frame_count
-                }
-        
-        return {
-            "success": True,
-            "message": "Laptop camera status retrieved",
-            "data": status_data
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting laptop camera status: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting laptop camera status: {str(e)}"
-        )
-
-
-@router.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: int):
-    """WebSocket endpoint for real-time detection updates"""
-    await manager.connect(websocket)
-    try:
-        while True:
-            # Send periodic status updates
-            status = camera_manager.get_camera_status()
-            await manager.send_personal_message(
-                json.dumps({
-                    "type": "status_update",
-                    "cameras": status,
-                    "timestamp": asyncio.get_event_loop().time()
-                }),
-                websocket
-            )
-            await asyncio.sleep(5)  # Update every 5 seconds
-            
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        logger.info(f"WebSocket client {client_id} disconnected")
-
-
-# Background task to send detection updates
-async def send_detection_updates():
-    """Background task to send detection updates to WebSocket clients"""
-    while True:
+        # Decode image
         try:
-            # Get latest detection logs
-            db = next(get_db())
-            latest_logs = db.query(DetectionLog).order_by(DetectionLog.timestamp.desc()).limit(10).all()
+            image_data = base64.b64decode(request.image_data)
+            nparr = np.frombuffer(image_data, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
-            # Prepare update message
-            update_data = {
-                "type": "detection_update",
-                "logs": [
-                    {
-                        "timestamp": log.timestamp.isoformat(),
-                        "faces_detected": log.faces_detected,
-                        "students_recognized": log.students_recognized,
-                        "camera_location": log.camera_location
-                    }
-                    for log in latest_logs
-                ]
-            }
-            
-            # Broadcast to all connected clients
-            await manager.broadcast(json.dumps(update_data))
-            
+            if frame is None:
+                raise ValueError("Invalid image data")
+                
         except Exception as e:
-            logger.error(f"Error sending detection updates: {e}")
+            logger.error(f"Error decoding image: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid image data"
+            )
         
-        await asyncio.sleep(10)  # Update every 10 seconds
+        # Detect faces
+        face_locations = face_recognition_system.detect_faces(frame)
+        faces_detected = len(face_locations)
+        
+        matches = []
+        attendance_marked = 0
+        
+        # Process each detected face
+        for (x1, y1, x2, y2) in face_locations:
+            # Extract face region
+            face_img = frame[y1:y2, x1:x2]
+            
+            # Extract embedding
+            embedding = face_recognition_system.extract_face_embedding(face_img)
+            
+            if embedding is not None:
+                # Find best match
+                best_match = face_recognition_system.find_best_match(embedding)
+                
+                if best_match:
+                    student_id = best_match["student_id"]
+                    confidence = best_match["confidence"]
+                    
+                    # Get student details
+                    student = db.query(Student).filter(Student.student_id == student_id).first()
+                    
+                        if student:
+                            # Check if attendance already marked today
+                            today = datetime.utcnow().date()
+                            existing_attendance = db.query(AttendanceLog).filter(
+                                AttendanceLog.student_id == student_id,
+                                AttendanceLog.detected_at >= today
+                            ).first()
+                            
+                            if not existing_attendance:
+                                # Mark attendance
+                                attendance_log = AttendanceLog(
+                                    student_id=student_id,
+                                    confidence=confidence,
+                                    camera_source=session["camera_source"]
+                                )
+                                db.add(attendance_log)
+                                attendance_marked += 1
+                                
+                                logger.info(f"ATTENDANCE MARKED: Student {student_id} ({student.name}) - confidence={confidence:.3f}")
+                                
+                                # Save detection photo
+                                try:
+                                    from app.services.storage import storage_service
+                                    detection_photo_path = storage_service.save_detection_photo(
+                                        student_id, frame, datetime.utcnow()
+                                    )
+                                    if detection_photo_path:
+                                        logger.info(f"DETECTION PHOTO SAVED: {detection_photo_path}")
+                                except Exception as e:
+                                    logger.warning(f"Failed to save detection photo: {e}")
+                            
+                            # Add to matches for response
+                            matches.append({
+                                "student_id": student_id,
+                                "student_name": student.name,
+                                "roll_no": student.roll_no,
+                                "branch": student.branch,
+                                "year": student.year,
+                                "confidence": confidence,
+                                "bbox": [int(x1), int(y1), int(x2), int(y2)],
+                                "attendance_marked": not bool(existing_attendance)
+                            })
+                            
+                            session["students_recognized"] += 1
+                    else:
+                        logger.warning(f"Student {student_id} not found in database")
+                else:
+                    # Unknown face
+                    matches.append({
+                        "student_id": None,
+                        "student_name": "Unknown",
+                        "roll_no": None,
+                        "branch": None,
+                        "year": None,
+                        "confidence": 0.0,
+                        "bbox": [int(x1), int(y1), int(x2), int(y2)],
+                        "attendance_marked": False
+                    })
+        
+        # Commit attendance logs
+        if attendance_marked > 0:
+            db.commit()
+            session["attendance_marked"] += attendance_marked
+        
+        # Log detection statistics
+        detection_log = DetectionLog(
+            faces_detected=faces_detected,
+            students_recognized=len([m for m in matches if m["student_id"]]),
+            processing_time=time.time() - start_time,
+            camera_source=session["camera_source"]
+        )
+        db.add(detection_log)
+        db.commit()
+        
+        processing_time_ms = (time.time() - start_time) * 1000
+        
+        logger.info(f"Frame processed: {faces_detected} faces, {len(matches)} matches, {attendance_marked} attendance marked")
+        
+        return DetectionResponse(
+            success=True,
+            message=f"Processed {faces_detected} faces, {len(matches)} matches, {attendance_marked} attendance marked",
+            faces_detected=faces_detected,
+            students_recognized=len([m for m in matches if m["student_id"]]),
+            matches=matches,
+            processing_time_ms=processing_time_ms
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing detection frame: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing frame: {str(e)}"
+        )
+
+@router.post("/stop")
+async def stop_detection(
+    request: DetectionStopRequest,
+    current_admin: str = Depends(get_current_admin)
+):
+    """Stop detection session"""
+    try:
+        if request.session_id not in detection_sessions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid session ID"
+            )
+        
+        session = detection_sessions.pop(request.session_id)
+        
+        logger.info(f"Detection session stopped: {request.session_id} by {current_admin}")
+        logger.info(f"Session stats: {session['frames_processed']} frames, {session['students_recognized']} recognized, {session['attendance_marked']} attendance marked")
+        
+        return {
+            "success": True,
+            "message": "Detection session stopped successfully",
+            "session_stats": session
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error stopping detection session: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error stopping detection session: {str(e)}"
+        )

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Registration - Face Attendance System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .video-container {
+            position: relative;
+            margin: 20px 0;
+            text-align: center;
+        }
+        #video {
+            width: 100%;
+            max-width: 640px;
+            height: 480px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .liveness-steps {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+        }
+        .step {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            margin: 0 5px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+        .step.active {
+            border-color: #007bff;
+            background-color: #e7f3ff;
+        }
+        .step.completed {
+            border-color: #28a745;
+            background-color: #d4edda;
+        }
+        .console-log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Student Registration with Liveness Detection</h1>
+        
+        <div id="status" class="status info" style="display: none;"></div>
+        
+        <form id="registrationForm">
+            <div class="form-group">
+                <label for="name">Full Name:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="roll_no">Roll Number:</label>
+                <input type="text" id="roll_no" name="roll_no" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="branch">Branch:</label>
+                <select id="branch" name="branch">
+                    <option value="">Select Branch</option>
+                    <option value="CSE">Computer Science Engineering</option>
+                    <option value="ECE">Electronics & Communication Engineering</option>
+                    <option value="ME">Mechanical Engineering</option>
+                    <option value="CE">Civil Engineering</option>
+                    <option value="IT">Information Technology</option>
+                    <option value="EEE">Electrical & Electronics Engineering</option>
+                    <option value="AI">Artificial Intelligence</option>
+                    <option value="DS">Data Science</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="year">Year:</label>
+                <select id="year" name="year">
+                    <option value="">Select Year</option>
+                    <option value="1">1st Year</option>
+                    <option value="2">2nd Year</option>
+                    <option value="3">3rd Year</option>
+                    <option value="4">4th Year</option>
+                </select>
+            </div>
+            
+            <button type="button" id="startLiveness" onclick="startLivenessDetection()">Start Liveness Detection</button>
+            <button type="button" id="stopLiveness" onclick="stopLivenessDetection()" disabled>Stop Detection</button>
+            <button type="button" id="registerStudent" onclick="registerStudent()" disabled>Complete Registration</button>
+        </form>
+        
+        <div class="liveness-steps">
+            <div class="step" id="step-center">
+                <h3>Center</h3>
+                <p>Look straight at camera</p>
+            </div>
+            <div class="step" id="step-left">
+                <h3>Left</h3>
+                <p>Turn head left</p>
+            </div>
+            <div class="step" id="step-right">
+                <h3>Right</h3>
+                <p>Turn head right</p>
+            </div>
+        </div>
+        
+        <div class="video-container">
+            <video id="video" autoplay muted style="display: none;"></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+        </div>
+        
+        <div class="console-log" id="consoleLog">
+            <div>Console Logs:</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8001/api/v1';
+        let video = null;
+        let canvas = null;
+        let ctx = null;
+        let stream = null;
+        let sessionId = null;
+        let currentStep = 'center';
+        let steps = ['center', 'left', 'right'];
+        let stepIndex = 0;
+        let isDetecting = false;
+        let detectionInterval = null;
+
+        function log(message) {
+            const consoleLog = document.getElementById('consoleLog');
+            const timestamp = new Date().toLocaleTimeString();
+            consoleLog.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+            console.log(message);
+        }
+
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+        }
+
+        function hideStatus() {
+            document.getElementById('status').style.display = 'none';
+        }
+
+        function updateStepUI() {
+            steps.forEach((step, index) => {
+                const stepElement = document.getElementById(`step-${step}`);
+                if (index < stepIndex) {
+                    stepElement.className = 'step completed';
+                } else if (index === stepIndex) {
+                    stepElement.className = 'step active';
+                } else {
+                    stepElement.className = 'step';
+                }
+            });
+        }
+
+        async function startLivenessDetection() {
+            try {
+                log('Starting liveness detection...');
+                showStatus('Starting camera...', 'info');
+                
+                // Get camera stream
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                
+                video = document.getElementById('video');
+                canvas = document.getElementById('canvas');
+                ctx = canvas.getContext('2d');
+                
+                video.srcObject = stream;
+                video.style.display = 'block';
+                
+                // Create liveness session
+                const response = await fetch(`${API_BASE_URL}/liveness/session`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to create liveness session');
+                }
+                
+                const data = await response.json();
+                sessionId = data.data.session_id;
+                log(`Liveness session created: ${sessionId}`);
+                
+                // Start detection
+                isDetecting = true;
+                stepIndex = 0;
+                currentStep = steps[stepIndex];
+                updateStepUI();
+                
+                document.getElementById('startLiveness').disabled = true;
+                document.getElementById('stopLiveness').disabled = false;
+                
+                showStatus('Look straight at the camera', 'info');
+                
+                // Start frame processing
+                detectionInterval = setInterval(processFrame, 1000);
+                
+            } catch (error) {
+                log(`Error starting liveness detection: ${error.message}`);
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function processFrame() {
+            if (!isDetecting || !video || !canvas) return;
+            
+            try {
+                // Capture frame
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0);
+                
+                // Convert to base64
+                const imageData = canvas.toDataURL('image/jpeg', 0.8);
+                const base64Data = imageData.split(',')[1];
+                
+                log(`Frame sent for ${currentStep} position`);
+                
+                // Send to API
+                const response = await fetch(`${API_BASE_URL}/liveness/detect`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        position: currentStep,
+                        frame_data: base64Data
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to process frame');
+                }
+                
+                const data = await response.json();
+                log(`Response received: ${data.message}`);
+                
+                if (data.success && data.is_live) {
+                    log(`Step passed: ${currentStep}`);
+                    stepIndex++;
+                    
+                    if (stepIndex < steps.length) {
+                        currentStep = steps[stepIndex];
+                        updateStepUI();
+                        showStatus(`Now turn your head ${currentStep}`, 'info');
+                    } else {
+                        // All steps completed
+                        log('All liveness steps completed!');
+                        showStatus('Liveness detection completed! You can now register.', 'success');
+                        document.getElementById('registerStudent').disabled = false;
+                        stopLivenessDetection();
+                    }
+                } else {
+                    log(`Step failed: ${data.message || 'No face detected'}`);
+                }
+                
+            } catch (error) {
+                log(`Error processing frame: ${error.message}`);
+            }
+        }
+
+        function stopLivenessDetection() {
+            isDetecting = false;
+            
+            if (detectionInterval) {
+                clearInterval(detectionInterval);
+                detectionInterval = null;
+            }
+            
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            if (video) {
+                video.style.display = 'none';
+            }
+            
+            document.getElementById('startLiveness').disabled = false;
+            document.getElementById('stopLiveness').disabled = true;
+            
+            log('Liveness detection stopped');
+        }
+
+        async function registerStudent() {
+            try {
+                const formData = {
+                    name: document.getElementById('name').value,
+                    roll_no: document.getElementById('roll_no').value,
+                    branch: document.getElementById('branch').value,
+                    year: parseInt(document.getElementById('year').value),
+                    session_id: sessionId
+                };
+                
+                log('Registering student...');
+                showStatus('Registering student...', 'info');
+                
+                const response = await fetch(`${API_BASE_URL}/liveness/register-student`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to register student');
+                }
+                
+                const data = await response.json();
+                log(`Student registered successfully: ${data.data.student_id}`);
+                showStatus(`Registration successful! Student ID: ${data.data.student_id}`, 'success');
+                
+                // Reset form
+                document.getElementById('registrationForm').reset();
+                document.getElementById('registerStudent').disabled = true;
+                stepIndex = 0;
+                updateStepUI();
+                
+            } catch (error) {
+                log(`Error registering student: ${error.message}`);
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            log('Registration page loaded');
+            updateStepUI();
+        });
+    </script>
+</body>
+</html>

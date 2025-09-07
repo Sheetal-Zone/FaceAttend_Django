@@ -1,49 +1,46 @@
 #!/usr/bin/env python3
 """
-FastAPI Startup Script
-Initializes database and starts the FastAPI server
+Start FastAPI Server for Face Attendance System
 """
 
+import uvicorn
+import logging
 import sys
-import os
 from pathlib import Path
 
-# Add the current directory to the Python path
-sys.path.insert(0, str(Path(__file__).parent))
+# Add the current directory to Python path
+current_dir = Path(__file__).parent
+sys.path.insert(0, str(current_dir))
+
+from app.config import settings
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper()),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+logger = logging.getLogger(__name__)
 
 def main():
-    """Start FastAPI server"""
+    """Start the FastAPI server"""
+    logger.info("Starting Face Attendance System FastAPI Server...")
+    logger.info(f"Server will run on {settings.api_host}:{settings.api_port}")
+    logger.info(f"Debug mode: {settings.debug}")
+    
     try:
-        print("🚀 Starting FastAPI Face Attendance System...")
-        
-        # Initialize database
-        print("🗄️  Initializing database...")
-        from scripts.init_db import init_database
-        if not init_database():
-            print("❌ Database initialization failed!")
-            sys.exit(1)
-        
-        print("✅ Database initialized successfully!")
-        
-        # Start FastAPI server
-        print("🌐 Starting FastAPI server on port 8001...")
-        print("📚 API Documentation: http://localhost:8001/docs")
-        print("🔑 Admin Login: admin / admin123")
-        print("⏹️  Press Ctrl+C to stop the server")
-        
-        import uvicorn
         uvicorn.run(
             "main:app",
-            host="0.0.0.0",
-            port=8001,
-            reload=True,
-            log_level="info"
+            host=settings.api_host,
+            port=settings.api_port,
+            reload=settings.debug,
+            log_level=settings.log_level.lower(),
+            access_log=True
         )
-        
     except KeyboardInterrupt:
-        print("\n🛑 Server stopped by user")
+        logger.info("Server stopped by user")
     except Exception as e:
-        print(f"❌ Error starting server: {e}")
+        logger.error(f"Failed to start server: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

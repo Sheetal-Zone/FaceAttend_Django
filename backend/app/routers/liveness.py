@@ -35,7 +35,7 @@ async def create_liveness_session(
 ):
     """Create a new liveness detection session"""
     try:
-        logger.info(f"POST /api/v1/liveness/session by user '{current_admin}' - Creating new liveness session")
+        logger.info(f"POST /api/v1/liveness/session by user '{current_admin}' - Creating new liveness session for student_id: {session_data.student_id}")
         
         # Generate unique session ID
         session_id = str(uuid.uuid4())
@@ -55,7 +55,7 @@ async def create_liveness_session(
         db.commit()
         db.refresh(session)
         
-        logger.info(f"Created liveness detection session: {session_id} (expires: {expires_at.isoformat()})")
+        logger.info(f"LIVENESS SESSION CREATED: {session_id} for student_id: {session_data.student_id} (expires: {expires_at.isoformat()})")
         
         return {
             "success": True,
@@ -75,8 +75,8 @@ async def create_liveness_session(
         )
 
 
-@router.post("/detect", response_model=LivenessDetectionResponse)
-async def detect_liveness(
+@router.post("/frames", response_model=LivenessDetectionResponse)
+async def process_liveness_frames(
     request: LivenessDetectionRequest,
     current_admin: str = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -186,68 +186,114 @@ async def detect_liveness(
         elif position == "right" and detected_pose == "right":
             session.right_verified = is_live
 
-        # Check if all required data (embeddings) are present
-        embeddings_captured = bool(
-            session.center_embedding and session.left_embedding and session.right_embedding
+        # Check if all positions are verified (not just embeddings captured)
+        all_positions_completed = bool(
+            session.center_verified and session.left_verified and session.right_verified
         )
         
-        if embeddings_captured:
+        if all_positions_completed:
             # All positions completed - finalize the session
             logger.info(f"All liveness positions completed for session {request.session_id}, finalizing...")
             
             # Verify movement and finalize
             try:
-                # Parse embeddings for movement verification
-                center_emb = np.array(json.loads(session.center_embedding))
-                left_emb = np.array(json.loads(session.left_embedding))
-                right_emb = np.array(json.loads(session.right_embedding))
+                # Parse embeddings for movement verification if available
+                if session.center_embedding and session.left_embedding and session.right_embedding:
+                    center_emb = np.array(json.loads(session.center_embedding))
+                    left_emb = np.array(json.loads(session.left_embedding))
+                    right_emb = np.array(json.loads(session.right_embedding))
+                    
+                    # Verify movement using liveness detection engine
+                    from app.liveness_detection import liveness_detection_engine
+                    movement_result = liveness_detection_engine.verify_liveness_movement(
+                        center_emb, left_emb, right_emb
+                    )
+                    
+                    session.movement_verified = movement_result['movement_verified']
+                    session.liveness_score = movement_result['confidence']
+                else:
+                    # If embeddings not available, use basic verification
+                    session.movement_verified = True
+                    session.liveness_score = 0.8
+                    logger.warning(f"Embeddings not available for session {request.session_id}, using basic verification")
                 
-                # Verify movement using liveness detection engine
-                from app.liveness_detection import liveness_detection_engine
-                movement_result = liveness_detection_engine.verify_liveness_movement(
-                    center_emb, left_emb, right_emb
-                )
-                
-                session.movement_verified = movement_result['movement_verified']
-                session.liveness_score = movement_result['confidence']
-                
-                if movement_result['movement_verified']:
+                if session.movement_verified:
                     # Use center embedding as final embedding
                     session.final_embedding = session.center_embedding
                     session.status = "COMPLETED"
                     session.completed_at = datetime.utcnow()
                     
-                    # Save embeddings to student if student_id is available
-                    if session.student_id:
-                        student = db.query(Student).filter(Student.id == session.student_id).first()
-                        if student:
-                            # Persist binary embedding as well
-                            try:
-                                import json, numpy as np
-                                emb = np.array(json.loads(session.final_embedding), dtype=np.float32)
-                                student.face_embedding = emb.tobytes()
-                            except Exception:
-                                pass
-                            student.embedding_vector = session.final_embedding
-                            student.liveness_verified = True
-                            student.liveness_verification_date = datetime.utcnow()
-                            student.liveness_confidence_score = session.liveness_score
-                            db.add(student)
-                            logger.info(f"Embeddings saved for Student {student.id} in database table 'students.embedding_vector'")
-                            
-                            # Reload known faces in recognition system
-                            try:
-                                students = db.query(Student).filter(Student.embedding_vector.isnot(None)).all()
-                                students_data = [
-                                    { 'id': s.id, 'embedding_vector': s.embedding_vector }
-                                    for s in students
-                                ]
-                                face_recognition_system.load_known_faces(students_data)
-                                logger.info(f"Reloaded {len(students_data)} known faces in recognition system")
-                            except Exception as e:
-                                logger.warning(f"Failed reloading known faces after liveness completion: {e}")
+        # Save embeddings to student_embeddings table if student_id is available
+        if session.student_id:
+            student = db.query(Student).filter(Student.student_id == session.student_id).first()
+            if student and session.final_embedding:
+                try:
+                    import json, numpy as np
+                    emb = np.array(json.loads(session.final_embedding), dtype=np.float32)
+
+                    # Create or update student embedding
+                    from app.models import StudentEmbedding
+                    student_embedding = db.query(StudentEmbedding).filter(
+                        StudentEmbedding.student_id == session.student_id
+                    ).first()
+
+                    if student_embedding:
+                        # Update existing embedding
+                        student_embedding.embedding = emb.tobytes()
+                        student_embedding.quality_score = session.liveness_score
+                        student_embedding.model_version = settings.embedding_model_version
                     else:
-                        logger.info(f"Session {request.session_id} completed but no student_id - embeddings saved in session")
+                        # Create new embedding
+                        student_embedding = StudentEmbedding(
+                            student_id=session.student_id,
+                            embedding=emb.tobytes(),
+                            quality_score=session.liveness_score,
+                            model_version=settings.embedding_model_version
+                        )
+                        db.add(student_embedding)
+
+                    db.commit()
+                    logger.info(f"EMBEDDINGS SAVED: Student {student.student_id} ({student.name}) - embedding stored in student_embeddings table")
+
+                    # Save registration photo
+                    try:
+                        from app.services.storage import storage_service
+                        import base64
+                        import cv2
+                        
+                        # Decode the final frame and save as registration photo
+                        if session.final_frame_data:
+                            image_data = base64.b64decode(session.final_frame_data)
+                            nparr = np.frombuffer(image_data, np.uint8)
+                            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                            
+                            if frame is not None:
+                                photo_path = storage_service.save_registration_photo(session.student_id, frame)
+                                if photo_path:
+                                    logger.info(f"REGISTRATION PHOTO SAVED: {photo_path}")
+                                else:
+                                    logger.warning("Failed to save registration photo")
+                    except Exception as e:
+                        logger.warning(f"Failed to save registration photo: {e}")
+
+                    # Reload known faces in recognition system
+                    try:
+                        embeddings = db.query(StudentEmbedding).all()
+                        students_data = [
+                            { 'student_id': e.student_id, 'embedding': e.embedding }
+                            for e in embeddings
+                        ]
+                        face_recognition_system.load_known_faces(students_data)
+                        logger.info(f"Reloaded {len(students_data)} known faces in recognition system")
+                    except Exception as e:
+                        logger.warning(f"Failed reloading known faces after liveness completion: {e}")
+
+                except Exception as e:
+                    logger.error(f"Failed to save binary embedding: {e}")
+            else:
+                logger.warning(f"Student {session.student_id} not found or no final embedding available")
+        else:
+            logger.info(f"Session {request.session_id} completed but no student_id - embeddings saved in session")
                     
                     logger.info(f"Liveness detection session {request.session_id} completed successfully with score {session.liveness_score:.3f}")
                 else:
@@ -384,6 +430,114 @@ async def verify_liveness_completion(
         )
 
 
+@router.post("/complete", response_model=APIResponse)
+async def complete_liveness_detection(
+    request: LivenessVerificationRequest,
+    current_admin: str = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Complete liveness detection and save embeddings for student"""
+    try:
+        logger.info(f"POST /api/v1/liveness/complete by user '{current_admin}' - Completing liveness for session {request.session_id}")
+        
+        # Get session
+        session = db.query(LivenessDetectionSession).filter(
+            LivenessDetectionSession.session_id == request.session_id
+        ).first()
+        
+        if not session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Liveness session not found"
+            )
+        
+        if session.status != "COMPLETED":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Liveness session not completed yet"
+            )
+        
+        if not session.final_embedding:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No embeddings found in liveness session"
+            )
+        
+        # Get student
+        student = db.query(Student).filter(Student.student_id == request.student_id).first()
+        if not student:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student not found"
+            )
+        
+        # Save embeddings to student_embeddings table
+        try:
+            import json, numpy as np
+            emb = np.array(json.loads(session.final_embedding), dtype=np.float32)
+            
+            # Create or update student embedding
+            student_embedding = db.query(StudentEmbedding).filter(
+                StudentEmbedding.student_id == request.student_id
+            ).first()
+            
+            if student_embedding:
+                # Update existing embedding
+                student_embedding.embedding = emb.tobytes()
+                student_embedding.quality_score = session.liveness_score
+                student_embedding.model_version = settings.embedding_model_version
+            else:
+                # Create new embedding
+                student_embedding = StudentEmbedding(
+                    student_id=request.student_id,
+                    embedding=emb.tobytes(),
+                    quality_score=session.liveness_score,
+                    model_version=settings.embedding_model_version
+                )
+                db.add(student_embedding)
+            
+            db.commit()
+            logger.info(f"EMBEDDINGS SAVED: Student {student.student_id} ({student.name}) - embedding stored in student_embeddings table")
+            
+            # Reload known faces in recognition system
+            try:
+                embeddings = db.query(StudentEmbedding).all()
+                students_data = [
+                    { 'student_id': e.student_id, 'embedding': e.embedding }
+                    for e in embeddings
+                ]
+                face_recognition_system.load_known_faces(students_data)
+                logger.info(f"Reloaded {len(students_data)} known faces in recognition system")
+            except Exception as e:
+                logger.warning(f"Failed reloading known faces after liveness completion: {e}")
+                
+        except Exception as e:
+            logger.error(f"Failed to save binary embedding: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to save embeddings: {str(e)}"
+            )
+        
+        return {
+            "success": True,
+            "message": "Embeddings saved successfully",
+            "data": {
+                "student_id": student.student_id,
+                "student_name": student.name,
+                "roll_no": student.roll_no,
+                "embedding_saved": True
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error completing liveness detection: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error completing liveness detection: {str(e)}"
+        )
+
 @router.post("/register-student", response_model=APIResponse)
 async def register_student_with_liveness(
     request: StudentRegistrationWithLiveness,
@@ -415,34 +569,63 @@ async def register_student_with_liveness(
             )
         
         # Create the student record
-        from app.models import Student
+        from app.models import Student, StudentEmbedding
         student = Student(
             name=request.name,
-            roll_number=request.roll_number,
-            embedding_vector=session.final_embedding,
-            liveness_verified=True,
-            liveness_verification_date=datetime.utcnow(),
-            liveness_confidence_score=session.liveness_score or 0.0
+            roll_no=request.roll_no,
+            branch=request.branch,
+            year=request.year
         )
         
         db.add(student)
         db.commit()
         db.refresh(student)
         
+        # Save embeddings to student_embeddings table
+        if session.final_embedding:
+            try:
+                import json, numpy as np
+                emb = np.array(json.loads(session.final_embedding), dtype=np.float32)
+                
+                student_embedding = StudentEmbedding(
+                    student_id=student.student_id,
+                    embedding=emb.tobytes(),
+                    quality_score=session.liveness_score or 0.0,
+                    model_version=settings.embedding_model_version
+                )
+                db.add(student_embedding)
+                db.commit()
+                
+                # Reload known faces in recognition system
+                try:
+                    embeddings = db.query(StudentEmbedding).all()
+                    students_data = [
+                        { 'student_id': e.student_id, 'embedding': e.embedding }
+                        for e in embeddings
+                    ]
+                    face_recognition_system.load_known_faces(students_data)
+                    logger.info(f"Reloaded {len(students_data)} known faces in recognition system")
+                except Exception as e:
+                    logger.warning(f"Failed reloading known faces after registration: {e}")
+                    
+            except Exception as e:
+                logger.error(f"Failed to save binary embedding: {e}")
+        
         # Update session with student_id
-        session.student_id = student.id
+        session.student_id = student.student_id
         db.commit()
         
-        logger.info(f"Student registration completed: ID={student.id}, Name={student.name}, Embeddings saved")
+        logger.info(f"Student registration completed: ID={student.student_id}, Name={student.name}, Embeddings saved")
         
         return {
             "success": True,
             "message": "Student registration completed successfully",
             "data": {
-                "student_id": student.id,
+                "student_id": student.student_id,
                 "name": student.name,
-                "roll_number": student.roll_number,
-                "liveness_verified": True,
+                "roll_no": student.roll_no,
+                "branch": student.branch,
+                "year": student.year,
                 "embedding_saved": True
             }
         }

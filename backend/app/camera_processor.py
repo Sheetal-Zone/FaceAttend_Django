@@ -5,7 +5,7 @@ import threading
 from typing import Optional, Callable, Dict
 from app.ai_models import face_recognition_system
 from app.database import SessionLocal
-from app.models import Student, Attendance, DetectionLog
+from app.models import Student, AttendanceLog, DetectionLog
 from app.config import settings
 import logging
 
@@ -200,27 +200,32 @@ class CameraProcessor:
                 student_id = student_data['student_id']
                 confidence = student_data['confidence']
                 
-                # Check if attendance already marked for today
-                from sqlalchemy import func
-                from datetime import date
-                today = date.today()
-                # Prevent duplicate per day per student
-                existing_attendance = db.query(Attendance).filter(
-                    Attendance.student_id == student_id,
-                    func.date(Attendance.timestamp) == today
-                ).first()
-                
-                if not existing_attendance:
-                    # Mark new attendance
-                    attendance = Attendance(
-                        student_id=student_id,
-                        status="Present",
-                        confidence_score=confidence,
-                        camera_location=self.camera_location
-                    )
-                    db.add(attendance)
-                    logger.info(f"Attendance queued for save student_id={student_id} confidence={confidence:.3f} camera={self.camera_location}")
-                    logger.info(f"Marked attendance for student {student_id}")
+                # Only mark attendance if confidence > 0.7
+                if confidence > 0.7:
+                    # Check if attendance already marked for today
+                    from sqlalchemy import func
+                    from datetime import date
+                    today = date.today()
+                    # Prevent duplicate per day per student
+                    existing_attendance = db.query(Attendance).filter(
+                        Attendance.student_id == student_id,
+                        func.date(Attendance.timestamp) == today
+                    ).first()
+                    
+                    if not existing_attendance:
+                        # Mark new attendance
+                        attendance = Attendance(
+                            student_id=student_id,
+                            status="Present",
+                            confidence_score=confidence,
+                            camera_location=self.camera_location
+                        )
+                        db.add(attendance)
+                        logger.info(f"Attendance marked for student {student_id} with confidence {confidence:.3f} at {self.camera_location}")
+                    else:
+                        logger.info(f"Attendance already marked for student {student_id} today")
+                else:
+                    logger.info(f"Confidence {confidence:.3f} too low for student {student_id}, skipping attendance")
             
             db.commit()
             logger.info("Attendance commit completed for recognized students batch")
@@ -581,22 +586,31 @@ class LaptopCameraProcessor:
                 student_id = student_data['student_id']
                 confidence = student_data['confidence']
                 
-                # Check if attendance already marked for today
-                today = time.strftime('%Y-%m-%d')
-                existing_attendance = db.query(Attendance).filter(
-                    Attendance.student_id == student_id,
-                    Attendance.timestamp >= today
-                ).first()
-                
-                if not existing_attendance:
-                    # Mark new attendance
-                    attendance = Attendance(
-                        student_id=student_id,
-                        status="Present",
-                        confidence_score=confidence,
-                        camera_location=self.camera_location
-                    )
-                    db.add(attendance)
+                # Only mark attendance if confidence > 0.7
+                if confidence > 0.7:
+                    # Check if attendance already marked for today
+                    from sqlalchemy import func
+                    from datetime import date
+                    today = date.today()
+                    existing_attendance = db.query(Attendance).filter(
+                        Attendance.student_id == student_id,
+                        func.date(Attendance.timestamp) == today
+                    ).first()
+                    
+                    if not existing_attendance:
+                        # Mark new attendance
+                        attendance = Attendance(
+                            student_id=student_id,
+                            status="Present",
+                            confidence_score=confidence,
+                            camera_location=self.camera_location
+                        )
+                        db.add(attendance)
+                        logger.info(f"Laptop camera: Attendance marked for student {student_id} with confidence {confidence:.3f}")
+                    else:
+                        logger.info(f"Laptop camera: Attendance already marked for student {student_id} today")
+                else:
+                    logger.info(f"Laptop camera: Confidence {confidence:.3f} too low for student {student_id}, skipping attendance")
                     logger.info(f"Marked attendance for student {student_id} via laptop camera")
             
             db.commit()

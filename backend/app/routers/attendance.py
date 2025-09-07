@@ -7,8 +7,8 @@ import pandas as pd
 import io
 from app.auth import get_current_admin
 from app.database import get_db
-from app.models import Attendance, Student
-from app.schemas import AttendanceWithStudent, APIResponse, PaginatedResponse, ExportRequest
+from app.models import AttendanceLog, Student
+from app.schemas import AttendanceLogWithStudent, APIResponse, PaginatedResponse, ExportRequest
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,37 +28,35 @@ async def get_attendance(
 ):
     """Get attendance records with filtering and pagination"""
     try:
-        query = db.query(Attendance).join(Student)
+        query = db.query(AttendanceLog).join(Student)
         
         # Apply filters
         if start_date:
-            query = query.filter(Attendance.timestamp >= start_date)
+            query = query.filter(AttendanceLog.detected_at >= start_date)
         if end_date:
-            query = query.filter(Attendance.timestamp <= end_date)
+            query = query.filter(AttendanceLog.detected_at <= end_date)
         if student_id:
-            query = query.filter(Attendance.student_id == student_id)
-        if status_filter:
-            query = query.filter(Attendance.status == status_filter)
+            query = query.filter(AttendanceLog.student_id == student_id)
         
         # Get total count
         total = query.count()
         
         # Apply pagination and ordering
-        attendance_records = query.order_by(Attendance.timestamp.desc()).offset(skip).limit(limit).all()
+        attendance_records = query.order_by(AttendanceLog.detected_at.desc()).offset(skip).limit(limit).all()
         
         # Convert to response format
         attendance_list = []
         for record in attendance_records:
             attendance_dict = {
-                "id": record.id,
+                "log_id": record.log_id,
                 "student_id": record.student_id,
                 "student_name": record.student.name,
-                "student_roll_number": record.student.roll_number,
-                "timestamp": record.timestamp,
-                "status": record.status,
-                "confidence_score": record.confidence_score,
-                "camera_location": record.camera_location,
-                "created_at": record.created_at
+                "student_roll_no": record.student.roll_no,
+                "student_branch": record.student.branch,
+                "student_year": record.student.year,
+                "detected_at": record.detected_at,
+                "confidence": record.confidence,
+                "camera_source": record.camera_source
             }
             attendance_list.append(attendance_dict)
         
@@ -81,8 +79,8 @@ async def get_attendance(
 @router.post("/mark", response_model=APIResponse)
 async def mark_attendance(
     student_id: int,
-    confidence_score: Optional[float] = None,
-    camera_location: Optional[str] = None,
+    confidence: float,
+    camera_source: Optional[str] = None,
     current_admin: str = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
@@ -90,17 +88,17 @@ async def mark_attendance(
     try:
         logger.info(f"Marking attendance for student_id={student_id} by user '{current_admin}'")
 
-        student = db.query(Student).filter(Student.id == student_id).first()
+        student = db.query(Student).filter(Student.student_id == student_id).first()
         if not student:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
 
         # Prevent duplicate attendance for the same student on the same day
         today = date.today()
         existing = (
-            db.query(Attendance)
+            db.query(AttendanceLog)
             .filter(
-                Attendance.student_id == student_id,
-                func.date(Attendance.timestamp) == today,
+                AttendanceLog.student_id == student_id,
+                func.date(AttendanceLog.detected_at) == today,
             )
             .first()
         )
@@ -110,34 +108,33 @@ async def mark_attendance(
                 "success": True,
                 "message": "Attendance already marked today",
                 "data": {
-                    "attendance_id": existing.id,
+                    "log_id": existing.log_id,
                     "student_id": existing.student_id,
-                    "timestamp": existing.timestamp,
-                    "status": existing.status,
+                    "detected_at": existing.detected_at,
+                    "confidence": existing.confidence,
                 },
             }
 
         # Create new attendance record
-        record = Attendance(
+        record = AttendanceLog(
             student_id=student_id,
-            timestamp=datetime.utcnow(),
-            status="Present",
-            confidence_score=confidence_score,
-            camera_location=camera_location,
+            detected_at=datetime.utcnow(),
+            confidence=confidence,
+            camera_source=camera_source,
         )
         db.add(record)
         db.commit()
         db.refresh(record)
-        logger.info(f"Attendance marked: id={record.id} student={student_id}")
+        logger.info(f"Attendance marked: log_id={record.log_id} student={student_id}")
 
         return {
             "success": True,
             "message": f"Attendance marked for {student.name}",
             "data": {
-                "attendance_id": record.id,
+                "log_id": record.log_id,
                 "student_id": record.student_id,
-                "timestamp": record.timestamp,
-                "status": record.status,
+                "detected_at": record.detected_at,
+                "confidence": record.confidence,
             },
         }
     
@@ -150,15 +147,15 @@ async def mark_attendance(
             detail=f"Error marking attendance: {str(e)}",
         )
 
-@router.get("/{attendance_id}", response_model=AttendanceWithStudent)
+@router.get("/{log_id}", response_model=AttendanceLogWithStudent)
 async def get_attendance_record(
-    attendance_id: int,
+    log_id: int,
     current_admin: str = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Get a specific attendance record"""
     try:
-        attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
+        attendance = db.query(AttendanceLog).filter(AttendanceLog.log_id == log_id).first()
         if not attendance:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -170,7 +167,7 @@ async def get_attendance_record(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting attendance record {attendance_id}: {e}")
+        logger.error(f"Error getting attendance record {log_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving attendance record: {str(e)}"
@@ -186,36 +183,30 @@ async def get_attendance_summary(
 ):
     """Get attendance summary statistics"""
     try:
-        query = db.query(Attendance)
+        query = db.query(AttendanceLog)
         
         # Apply date filters
         if start_date:
-            query = query.filter(Attendance.timestamp >= start_date)
+            query = query.filter(AttendanceLog.detected_at >= start_date)
         if end_date:
-            query = query.filter(Attendance.timestamp <= end_date)
+            query = query.filter(AttendanceLog.detected_at <= end_date)
         
         # Calculate statistics
         total_attendance = query.count()
-        present_count = query.filter(Attendance.status == "Present").count()
-        absent_count = query.filter(Attendance.status == "Absent").count()
-        late_count = query.filter(Attendance.status == "Late").count()
-        
-        # Calculate attendance rate
-        attendance_rate = (present_count / total_attendance * 100) if total_attendance > 0 else 0
         
         # Get unique students
-        unique_students = db.query(Attendance.student_id).distinct().count()
+        unique_students = db.query(AttendanceLog.student_id).distinct().count()
+        
+        # Calculate average confidence
+        avg_confidence = db.query(func.avg(AttendanceLog.confidence)).scalar() or 0
         
         return {
             "success": True,
             "message": "Attendance summary retrieved successfully",
             "data": {
                 "total_attendance": total_attendance,
-                "present_count": present_count,
-                "absent_count": absent_count,
-                "late_count": late_count,
-                "attendance_rate": round(attendance_rate, 2),
                 "unique_students": unique_students,
+                "average_confidence": round(avg_confidence, 3),
                 "date_range": {
                     "start_date": start_date.isoformat() if start_date else None,
                     "end_date": end_date.isoformat() if end_date else None
@@ -239,31 +230,31 @@ async def export_attendance(
 ):
     """Export attendance data as CSV or Excel"""
     try:
-        query = db.query(Attendance).join(Student)
+        query = db.query(AttendanceLog).join(Student)
         
         # Apply filters
         if export_request.start_date:
-            query = query.filter(Attendance.timestamp >= export_request.start_date)
+            query = query.filter(AttendanceLog.detected_at >= export_request.start_date)
         if export_request.end_date:
-            query = query.filter(Attendance.timestamp <= export_request.end_date)
+            query = query.filter(AttendanceLog.detected_at <= export_request.end_date)
         if export_request.student_id:
-            query = query.filter(Attendance.student_id == export_request.student_id)
+            query = query.filter(AttendanceLog.student_id == export_request.student_id)
         
         # Get all records
-        attendance_records = query.order_by(Attendance.timestamp.desc()).all()
+        attendance_records = query.order_by(AttendanceLog.detected_at.desc()).all()
         
         # Prepare data for export
         export_data = []
         for record in attendance_records:
             export_data.append({
                 "Student Name": record.student.name,
-                "Roll Number": record.student.roll_number,
-                "Date": record.timestamp.date(),
-                "Time": record.timestamp.time(),
-                "Status": record.status,
-                "Confidence Score": record.confidence_score or "",
-                "Camera Location": record.camera_location or "",
-                "Created At": record.created_at
+                "Roll Number": record.student.roll_no,
+                "Branch": record.student.branch or "",
+                "Year": record.student.year or "",
+                "Date": record.detected_at.date(),
+                "Time": record.detected_at.time(),
+                "Confidence": record.confidence,
+                "Camera Source": record.camera_source or ""
             })
         
         # Create DataFrame
@@ -301,15 +292,15 @@ async def export_attendance(
         )
 
 
-@router.delete("/{attendance_id}", response_model=APIResponse)
+@router.delete("/{log_id}", response_model=APIResponse)
 async def delete_attendance_record(
-    attendance_id: int,
+    log_id: int,
     current_admin: str = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Delete an attendance record"""
     try:
-        attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
+        attendance = db.query(AttendanceLog).filter(AttendanceLog.log_id == log_id).first()
         if not attendance:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -327,7 +318,7 @@ async def delete_attendance_record(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting attendance record {attendance_id}: {e}")
+        logger.error(f"Error deleting attendance record {log_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting attendance record: {str(e)}"

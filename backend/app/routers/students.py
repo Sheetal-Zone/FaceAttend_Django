@@ -6,7 +6,7 @@ import numpy as np
 import cv2
 from app.auth import get_current_admin
 from app.database import get_db
-from app.models import Student
+from app.models import Student, StudentEmbedding
 from app.schemas import StudentCreate, StudentUpdate, Student as StudentSchema, APIResponse, PaginatedResponse
 from app.ai_models import face_recognition_system
 import logging
@@ -24,7 +24,7 @@ async def create_student(
     """Create a new student (without photo upload - use liveness detection instead)"""
     try:
         # Check if student with roll number already exists
-        existing_student = db.query(Student).filter(Student.roll_number == student_data.roll_number).first()
+        existing_student = db.query(Student).filter(Student.roll_no == student_data.roll_no).first()
         if existing_student:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -34,7 +34,9 @@ async def create_student(
         # Create student object (without photo/embedding - will be added via liveness detection)
         student = Student(
             name=student_data.name,
-            roll_number=student_data.roll_number
+            roll_no=student_data.roll_no,
+            branch=student_data.branch,
+            year=student_data.year
         )
         
         # Save to database
@@ -48,7 +50,7 @@ async def create_student(
             "success": True,
             "message": f"Student {student.name} created successfully. Please complete liveness detection to add face data.",
             "data": {
-                "student_id": student.id,
+                "student_id": student.student_id,
                 "liveness_required": True
             }
         }
@@ -79,7 +81,7 @@ async def get_students(
         if search:
             query = query.filter(
                 Student.name.contains(search) | 
-                Student.roll_number.contains(search)
+                Student.roll_no.contains(search)
             )
         
         # Get total count
@@ -91,14 +93,17 @@ async def get_students(
         # Convert to schema
         student_list = []
         for student in students:
+            # Check if student has embedding
+            has_embedding = db.query(StudentEmbedding).filter(StudentEmbedding.student_id == student.student_id).first() is not None
+            
             student_dict = {
-                "id": student.id,
+                "student_id": student.student_id,
                 "name": student.name,
-                "roll_number": student.roll_number,
-                "liveness_verified": student.liveness_verified,
-                "liveness_confidence_score": student.liveness_confidence_score,
-                "created_at": student.created_at,
-                "updated_at": student.updated_at
+                "roll_no": student.roll_no,
+                "branch": student.branch,
+                "year": student.year,
+                "has_embedding": has_embedding,
+                "created_at": student.created_at
             }
             student_list.append(student_dict)
         
@@ -126,7 +131,7 @@ async def get_student(
 ):
     """Get a specific student by ID"""
     try:
-        student = db.query(Student).filter(Student.id == student_id).first()
+        student = db.query(Student).filter(Student.student_id == student_id).first()
         if not student:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -154,7 +159,7 @@ async def update_student(
 ):
     """Update a student (without photo upload)"""
     try:
-        student = db.query(Student).filter(Student.id == student_id).first()
+        student = db.query(Student).filter(Student.student_id == student_id).first()
         if not student:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -164,18 +169,22 @@ async def update_student(
         # Update fields
         if student_data.name is not None:
             student.name = student_data.name
-        if student_data.roll_number is not None:
+        if student_data.roll_no is not None:
             # Check if roll number already exists
             existing = db.query(Student).filter(
-                Student.roll_number == student_data.roll_number,
-                Student.id != student_id
+                Student.roll_no == student_data.roll_no,
+                Student.student_id != student_id
             ).first()
             if existing:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Student with this roll number already exists"
                 )
-            student.roll_number = student_data.roll_number
+            student.roll_no = student_data.roll_no
+        if student_data.branch is not None:
+            student.branch = student_data.branch
+        if student_data.year is not None:
+            student.year = student_data.year
         
         db.commit()
         db.refresh(student)
@@ -203,7 +212,7 @@ async def delete_student(
 ):
     """Delete a student"""
     try:
-        student = db.query(Student).filter(Student.id == student_id).first()
+        student = db.query(Student).filter(Student.student_id == student_id).first()
         if not student:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -235,12 +244,12 @@ async def delete_student(
 def _reload_known_faces(db: Session):
     """Reload known faces in the AI system"""
     try:
-        students = db.query(Student).filter(Student.embedding_vector.isnot(None)).all()
+        embeddings = db.query(StudentEmbedding).all()
         students_data = []
-        for student in students:
+        for embedding in embeddings:
             students_data.append({
-                'id': student.id,
-                'embedding_vector': student.embedding_vector
+                'student_id': embedding.student_id,
+                'embedding': embedding.embedding
             })
         face_recognition_system.load_known_faces(students_data)
     except Exception as e:

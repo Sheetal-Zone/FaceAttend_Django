@@ -22,7 +22,7 @@ def test_imports():
         from app.database import engine, create_tables
         print("✅ Database module imported")
         
-        from app.models import Base, Student, LivenessDetectionSession, Attendance, DetectionLog, AdminUser
+        from app.models import Base, Student, LivenessDetectionSession, AttendanceLog, DetectionLog, AdminUser
         print("✅ Models module imported")
         
         from app.auth import authenticate_admin, create_access_token, verify_token

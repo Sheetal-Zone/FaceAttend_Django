@@ -14,7 +14,7 @@ sys.path.insert(0, str(project_root))
 
 from app.database import create_tables, SessionLocal
 from app.auth import init_admin_password
-from app.models import Student, Attendance, DetectionLog
+from app.models import Student, AttendanceLog, DetectionLog
 from app.config import settings
 import logging
 

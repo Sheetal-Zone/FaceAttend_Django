@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.database import create_tables, engine
-from app.models import Base, Student, LivenessDetectionSession, Attendance, DetectionLog
+from app.models import Base, Student, LivenessDetectionSession, AttendanceLog, DetectionLog
 from app.auth import create_admin_user
 import logging
 

@@ -35,16 +35,25 @@ class Settings(BaseSettings):
     
     # API Configuration
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_port: int = 8001
     debug: bool = False
-    cors_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    cors_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8000", "http://127.0.0.1:8000"]
+    
+    # Face Recognition Configuration
+    recognition_threshold: float = 0.7
+    embedding_model_version: str = "buffalo_l"
+    
+    # Camera Configuration
+    camera_retry_attempts: int = 3
+    camera_retry_delay: float = 1.0
+    camera_timeout: float = 30.0
     
     # Logging
     log_level: str = "INFO"
     log_file: str = "logs/app.log"
     
     class Config:
-        env_file = ".env"
+        env_file = "env.production"
         case_sensitive = False
 
 

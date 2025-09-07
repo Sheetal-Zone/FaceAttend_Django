@@ -105,8 +105,12 @@ async def recognize_faces(
     current_admin: str = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Recognize faces against known students"""
+    """Recognize faces against known students and mark attendance"""
     import time
+    from datetime import datetime
+    from app.models import Student, AttendanceLog, DetectionLog
+    from app.config import settings
+    
     start_time = time.time()
     
     try:
@@ -138,6 +142,8 @@ async def recognize_faces(
         face_locations = face_recognition_system.detect_faces(frame)
         
         matches = []
+        attendance_logs = []
+        
         for (x1, y1, x2, y2) in face_locations:
             # Extract face region
             face_img = frame[y1:y2, x1:x2]
@@ -150,16 +156,54 @@ async def recognize_faces(
                 best_match = face_recognition_system.find_best_match(embedding)
                 
                 if best_match:
-                    logger.info(f"Match found student_id={best_match['student_id']} confidence={best_match['confidence']:.3f}")
-                    matches.append({
-                        "student_id": best_match["student_id"],
-                        "confidence": best_match["confidence"],
-                        "bbox": [int(x1), int(y1), int(x2), int(y2)]
-                    })
+                    student_id = best_match["student_id"]
+                    confidence = best_match["confidence"]
+                    
+                    # Get student details
+                    student = db.query(Student).filter(Student.student_id == student_id).first()
+                    
+                    if student:
+                        # Create attendance log entry
+                        attendance_log = AttendanceLog(
+                            student_id=student_id,
+                            confidence=confidence,
+                            camera_source=request.camera_source or "unknown"
+                        )
+                        db.add(attendance_log)
+                        attendance_logs.append(attendance_log)
+                        
+                        logger.info(f"ATTENDANCE MARKED: Student {student_id} ({student.name}) - confidence={confidence:.3f}")
+                        
+                        matches.append({
+                            "student_id": student_id,
+                            "student_name": student.name,
+                            "roll_no": student.roll_no,
+                            "branch": student.branch,
+                            "year": student.year,
+                            "confidence": confidence,
+                            "bbox": [int(x1), int(y1), int(x2), int(y2)]
+                        })
+                    else:
+                        logger.warning(f"Student {student_id} not found in database")
                 else:
                     logger.info("Embedding did not match any known student")
             else:
                 logger.info("No embedding extracted for detected face region")
+        
+        # Commit attendance logs
+        if attendance_logs:
+            db.commit()
+            logger.info(f"Saved {len(attendance_logs)} attendance records")
+        
+        # Log detection statistics
+        detection_log = DetectionLog(
+            faces_detected=len(face_locations),
+            students_recognized=len(matches),
+            processing_time=time.time() - start_time,
+            camera_source=request.camera_source or "unknown"
+        )
+        db.add(detection_log)
+        db.commit()
         
         processing_time = time.time() - start_time
         
@@ -167,9 +211,10 @@ async def recognize_faces(
         
         return {
             "success": True,
-            "message": f"Recognized {len(matches)} faces",
+            "message": f"Recognized {len(matches)} faces and marked attendance",
             "data": {
                 "matches": matches,
+                "attendance_logs_created": len(attendance_logs),
                 "processing_time": processing_time
             }
         }

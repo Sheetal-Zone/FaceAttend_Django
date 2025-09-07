@@ -21,67 +21,72 @@ class AdminLogin(BaseModel):
 # Student Schemas
 class StudentBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    roll_number: str = Field(..., min_length=1, max_length=50)
-    photo_url: Optional[str] = None
+    roll_no: str = Field(..., min_length=1, max_length=50)
+    branch: Optional[str] = None
+    year: Optional[int] = None
 
 
 class StudentCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    roll_number: str = Field(..., min_length=1, max_length=50)
-    # Removed photo_url field
+    roll_no: str = Field(..., min_length=1, max_length=50)
+    branch: Optional[str] = None
+    year: Optional[int] = None
 
 
 class StudentUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    roll_number: Optional[str] = Field(None, min_length=1, max_length=50)
-    # Removed photo_url field
+    roll_no: Optional[str] = Field(None, min_length=1, max_length=50)
+    branch: Optional[str] = None
+    year: Optional[int] = None
 
 
 class Student(BaseModel):
-    id: int
+    student_id: int
     name: str
-    roll_number: str
-    # Removed photo_url field
-    embedding_vector: Optional[str] = None
-    liveness_verified: bool = False
-    liveness_verification_date: Optional[datetime] = None
-    liveness_confidence_score: float = 0.0
+    roll_no: str
+    branch: Optional[str] = None
+    year: Optional[int] = None
     created_at: datetime
-    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class StudentEmbedding(BaseModel):
+    student_id: int
+    model_version: str
+    quality_score: float
+    created_at: datetime
     
     class Config:
         from_attributes = True
 
 
 # Attendance Schemas
-class AttendanceBase(BaseModel):
+class AttendanceLogBase(BaseModel):
     student_id: int
-    status: str = "Present"
-    confidence_score: Optional[float] = None
-    camera_location: Optional[str] = None
+    confidence: float
+    camera_source: Optional[str] = None
 
 
-class AttendanceCreate(BaseModel):
+class AttendanceLogCreate(BaseModel):
     student_id: int
-    status: str = "Present"
-    confidence_score: Optional[float] = None
-    camera_location: Optional[str] = None
+    confidence: float
+    camera_source: Optional[str] = None
 
 
-class Attendance(BaseModel):
-    id: int
+class AttendanceLog(BaseModel):
+    log_id: int
     student_id: int
-    timestamp: datetime
-    status: str
-    confidence_score: Optional[float] = None
-    camera_location: Optional[str] = None
-    created_at: datetime
+    detected_at: datetime
+    confidence: float
+    camera_source: Optional[str] = None
     
     class Config:
         from_attributes = True
 
 
-class AttendanceWithStudent(BaseModel):
+class AttendanceLogWithStudent(BaseModel):
     student: Student
 
 
@@ -90,7 +95,7 @@ class DetectionLogBase(BaseModel):
     faces_detected: int = 0
     students_recognized: int = 0
     processing_time: Optional[float] = None
-    camera_location: Optional[str] = None
+    camera_source: Optional[str] = None
     error_message: Optional[str] = None
 
 
@@ -104,7 +109,7 @@ class DetectionLog(BaseModel):
     faces_detected: int
     students_recognized: int
     processing_time: Optional[float] = None
-    camera_location: Optional[str] = None
+    camera_source: Optional[str] = None
     error_message: Optional[str] = None
     
     class Config:
@@ -113,8 +118,8 @@ class DetectionLog(BaseModel):
 
 # Face Recognition Schemas
 class FaceDetectionRequest(BaseModel):
-    camera_url: str = Field(..., description="RTSP or HTTP camera stream URL")
-    camera_location: Optional[str] = None
+    image_data: str = Field(..., description="Base64 encoded image data")
+    camera_source: Optional[str] = None
 
 
 class FaceDetectionResponse(BaseModel):
@@ -128,9 +133,23 @@ class FaceDetectionResponse(BaseModel):
 class RecognitionResult(BaseModel):
     student_id: int
     student_name: str
-    roll_number: str
+    roll_no: str
+    branch: Optional[str] = None
+    year: Optional[int] = None
     confidence_score: float
     timestamp: datetime
+
+
+class FaceRecognitionRequest(BaseModel):
+    image_data: str = Field(..., description="Base64 encoded image data")
+    camera_source: Optional[str] = None
+
+
+class FaceRecognitionResponse(BaseModel):
+    success: bool
+    message: str
+    matches: List[RecognitionResult] = []
+    processing_time: Optional[float] = None
 
 
 # Liveness Detection Schemas
@@ -219,7 +238,9 @@ class LivenessVerificationResponse(BaseModel):
 
 class StudentRegistrationWithLiveness(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    roll_number: str = Field(..., min_length=1, max_length=50)
+    roll_no: str = Field(..., min_length=1, max_length=50)
+    branch: Optional[str] = None
+    year: Optional[int] = None
     session_id: str
 
 

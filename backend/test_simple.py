@@ -17,7 +17,7 @@ def test_basic_functionality():
         # Test imports
         print("1. Testing imports...")
         from app.database import create_tables, engine
-        from app.models import Student, LivenessDetectionSession, Attendance
+        from app.models import Student, LivenessDetectionSession, AttendanceLog
         from app.auth import authenticate_admin, create_access_token
         from app.config import settings
         print("✅ All imports successful")
