@@ -8,22 +8,17 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./face_attendance.db"
     
     # JWT Configuration
-    secret_key: str = "your-super-secret-key-here-make-it-long-and-random"
-    algorithm: str = "HS256"
+    jwt_secret: str = "your-super-secret-key-here-make-it-long-and-random"
+    jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     
-    # Admin Credentials
+    # Admin Credentials (Default)
     admin_username: str = "admin"
     admin_password: str = "admin123"
     
     # AI Model Configuration
     yolo_model_path: str = "models/yolov8n.pt"
-    yolo_candidate_weights: List[str] = [
-        "models/yolov10n.pt",
-        "models/yolov9n.pt",
-        "models/yolov8n.pt",
-    ]
-    face_recognition_model: str = "arcface_r100_v1"
+    face_recognition_model: str = "buffalo_l"
     face_recognition_threshold: float = 0.6
     face_detection_confidence: float = 0.5
     allow_opencv_fallback: bool = False

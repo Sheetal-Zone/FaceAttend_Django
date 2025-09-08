@@ -12,7 +12,12 @@ import insightface
 from insightface.app import FaceAnalysis
 import os
 from typing import List, Dict, Optional, Tuple
-import mediapipe as mp
+try:
+    import mediapipe as mp
+    MEDIAPIPE_AVAILABLE = True
+except ImportError:
+    MEDIAPIPE_AVAILABLE = False
+    mp = None
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +55,16 @@ class ModelService:
     def _initialize_face_detector(self):
         """Initialize YOLOv8n face detector"""
         try:
-            model_path = "models/yolov8n-face.pt"
+            # Use YOLOv8n general model (works for face detection)
+            model_path = "models/yolov8n.pt"
             if not os.path.exists(model_path):
-                # Fallback to general YOLOv8n if face-specific model not available
-                model_path = "models/yolov8n.pt"
-                if not os.path.exists(model_path):
-                    model_path = "../models/yolov8n.pt"
+                model_path = "../models/yolov8n.pt"
+            
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"YOLOv8n model not found at {model_path}")
             
             self.face_detector = YOLO(model_path)
-            logger.info(f"YOLOv8n face detector loaded from {model_path}")
+            logger.info(f"✅ YOLO model loaded: v8n from {model_path}")
             
         except Exception as e:
             logger.error(f"Failed to load YOLOv8n: {e}")
@@ -67,20 +73,35 @@ class ModelService:
     def _initialize_face_recognizer(self):
         """Initialize InsightFace ArcFace recognizer"""
         try:
-            # Initialize InsightFace with antelopev2 model
+            # Initialize InsightFace with buffalo_l model (more stable)
             self.face_recognizer = FaceAnalysis(
-                name='antelopev2',
+                name='buffalo_l',
                 providers=['CPUExecutionProvider']
             )
             self.face_recognizer.prepare(ctx_id=0, det_size=(640, 640))
-            logger.info("InsightFace ArcFace recognizer initialized")
+            logger.info("✅ InsightFace loaded: ArcFace buffalo_l")
             
         except Exception as e:
             logger.error(f"Failed to initialize InsightFace: {e}")
-            raise
+            # Try with buffalo_s as fallback
+            try:
+                self.face_recognizer = FaceAnalysis(
+                    name='buffalo_s',
+                    providers=['CPUExecutionProvider']
+                )
+                self.face_recognizer.prepare(ctx_id=0, det_size=(640, 640))
+                logger.info("✅ InsightFace loaded: ArcFace buffalo_s (fallback)")
+            except Exception as e2:
+                logger.error(f"Failed to initialize InsightFace with fallback: {e2}")
+                raise
     
     def _initialize_face_landmarks(self):
         """Initialize MediaPipe for head pose estimation"""
+        if not MEDIAPIPE_AVAILABLE:
+            logger.warning("MediaPipe not available - head pose estimation disabled")
+            self.face_landmarks = None
+            return
+            
         try:
             self.face_landmarks = mp.solutions.face_mesh.FaceMesh(
                 static_image_mode=False,
@@ -93,7 +114,7 @@ class ModelService:
             
         except Exception as e:
             logger.error(f"Failed to initialize MediaPipe: {e}")
-            raise
+            self.face_landmarks = None
     
     def detect_faces(self, image: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """
@@ -168,10 +189,14 @@ class ModelService:
         Returns:
             Dictionary with yaw, pitch, roll angles
         """
-        try:
-            if not self.initialized:
-                raise RuntimeError("Models not initialized")
+        if not self.initialized:
+            raise RuntimeError("Models not initialized")
             
+        if not MEDIAPIPE_AVAILABLE or self.face_landmarks is None:
+            logger.warning("MediaPipe not available - returning default pose")
+            return {'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0}
+            
+        try:
             # Convert BGR to RGB
             rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             

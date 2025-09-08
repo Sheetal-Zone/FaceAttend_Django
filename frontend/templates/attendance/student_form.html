@@ -498,9 +498,13 @@ async function startLivenessDetection() {
 	});
 }
 
-function createLivenessSession() {
+async function createLivenessSession() {
 	if (!requireAuthOrRedirect()) {
-		return Promise.resolve(null);
+		return null;
+	}
+	// Ensure API base is resolved
+	if (!API_BASE) {
+		await resolveApiBase();
 	}
 	
 	console.log('Creating liveness session...');
@@ -529,11 +533,10 @@ function createLivenessSession() {
 	})
 	.then(data => {
 		console.log('Liveness session data:', data);
-		if (data.success) {
-			return data.data.session_id;
-		} else {
-			throw new Error(data.message || 'Failed to create liveness session');
-		}
+		// Support both new and old response shapes
+		if (data.session_id) return data.session_id;
+		if (data.success && data.data && data.data.session_id) return data.data.session_id;
+		throw new Error((data.detail || data.message) || 'Failed to create liveness session');
 	})
 	.catch(error => {
 		console.error('Error creating liveness session:', error);
@@ -674,7 +677,7 @@ function sendFrameToServer(frameData) {
 	
 	console.log('Sending frame to server for position:', currentStep);
 	
-	fetch(`${API_BASE}/api/v1/liveness/detect`, {
+	fetch(`${API_BASE}/api/v1/liveness/frames`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',

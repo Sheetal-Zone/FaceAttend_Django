@@ -1,58 +1,67 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
-from app.auth import authenticate_admin, create_access_token, get_current_admin
-from app.database import get_db
-from app.schemas import Token, AdminLogin, APIResponse
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from datetime import datetime, timedelta
+from jose import jwt
+
+router = APIRouter()
+SECRET_KEY = "supersecretkey"  # replace with env var in prod
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+@router.post("/login")
+def login(req: LoginRequest):
+    if req.username == "admin" and req.password == "admin123":
+        token = create_access_token({"sub": req.username})
+        return {"access_token": token, "token_type": "bearer"}
+    raise HTTPException(status_code=401, detail="Invalid credentials")
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+from jose import jwt
+from datetime import datetime, timedelta
+import logging
 from app.config import settings
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+auth_router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
-@router.post("/login", response_model=Token)
-async def login(form_data: AdminLogin, db: Session = Depends(get_db)):
-    """Admin login endpoint"""
+class LoginModel(BaseModel):
+    username: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
+
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (
+        expires_delta or timedelta(minutes=settings.access_token_expire_minutes)
+    )
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    return encoded_jwt
+
+
+@auth_router.post("/login")
+def login(user: LoginModel):
     try:
-        # Authenticate admin
-        if not authenticate_admin(form_data.username, form_data.password):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        # Create access token
-        access_token = create_access_token(data={"sub": form_data.username})
-        
-        return {
-            "access_token": access_token,
-            "token_type": "bearer"
-        }
-        
+        if user.username == settings.admin_username and user.password == settings.admin_password:
+            token = create_access_token({"sub": user.username})
+            logger.info("Admin login successful")
+            return {"access_token": token, "token_type": "bearer"}
+        logger.warning("Invalid admin credentials provided")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login failed: {str(e)}"
-        )
-
-
-@router.get("/me", response_model=APIResponse)
-async def get_current_user_info(current_admin: str = Depends(get_current_admin)):
-    """Get current admin user information"""
-    return {
-        "success": True,
-        "message": "Admin user information retrieved successfully",
-        "data": {
-            "username": current_admin,
-            "role": "admin"
-        }
-    }
-
-
-@router.post("/logout", response_model=APIResponse)
-async def logout(current_admin: str = Depends(get_current_admin)):
-    """Admin logout endpoint (client-side token removal)"""
-    return {
-        "success": True,
-        "message": "Logout successful"
-    }
+        logger.error(f"Login failed: {e}")
+        raise HTTPException(status_code=500, detail="Login failed")

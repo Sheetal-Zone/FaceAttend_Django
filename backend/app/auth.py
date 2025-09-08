@@ -6,7 +6,8 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from app.config import settings
-from app.database import get_db
+from app.database import get_db, SessionLocal
+from app.models import AdminUser
 import logging
 
 # Password hashing
@@ -35,14 +36,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
     
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    encoded_jwt = jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
     return encoded_jwt
 
 
 def verify_token(token: str) -> Optional[str]:
     """Verify and decode a JWT token"""
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
         username: str = payload.get("sub")
         if username is None:
             return None
@@ -53,10 +54,20 @@ def verify_token(token: str) -> Optional[str]:
 
 
 def authenticate_admin(username: str, password: str) -> bool:
-    """Authenticate admin user"""
-    # Compare directly against configured admin credentials.
-    # Note: For production, store and compare a persistent password hash.
-    return (username == settings.admin_username and password == settings.admin_password)
+    """Authenticate admin user using database-backed hashed password."""
+    try:
+        db = SessionLocal()
+        try:
+            user = db.query(AdminUser).filter(AdminUser.username == username, AdminUser.is_active == True).first()
+            if not user:
+                # fallback to env credentials if DB not yet initialized
+                return (username == settings.admin_username and password == settings.admin_password)
+            return verify_password(password, user.hashed_password)
+        finally:
+            db.close()
+    except Exception:
+        # If DB access fails, fallback to env credentials
+        return (username == settings.admin_username and password == settings.admin_password)
 
 
 async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
@@ -73,7 +84,24 @@ async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(
         logger.warning("401 Unauthorized: Missing Bearer token on protected endpoint access")
         raise credentials_exception
     username = verify_token(token)
-    if username is None or username != settings.admin_username:
+    if username is None:
+        logger.warning("401 Unauthorized: Invalid token payload")
+        raise credentials_exception
+
+    # Validate that user exists and is active
+    try:
+        db = SessionLocal()
+        try:
+            user = db.query(AdminUser).filter(AdminUser.username == username, AdminUser.is_active == True).first()
+            if not user:
+                logger.warning("401 Unauthorized: Token user not found or inactive")
+                raise credentials_exception
+        finally:
+            db.close()
+    except Exception:
+        # As a safety net, allow configured admin
+        if username != settings.admin_username:
+            raise credentials_exception
         logger.warning("401 Unauthorized: Invalid or unauthorized token used to access protected endpoint")
         raise credentials_exception
     

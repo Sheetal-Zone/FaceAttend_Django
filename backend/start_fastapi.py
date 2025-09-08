@@ -1,3 +1,18 @@
+import uvicorn
+import logging
+from pathlib import Path
+import sys
+current_dir = Path(__file__).parent
+sys.path.insert(0, str(current_dir))
+
+from app.config import settings
+
+logging.basicConfig(level=logging.INFO)
+def main():
+    uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=True, log_level="info")
+
+if __name__ == "__main__":
+    main()
 #!/usr/bin/env python3
 """
 Start FastAPI Server for Face Attendance System
@@ -8,7 +23,7 @@ import logging
 import sys
 from pathlib import Path
 
-# Add the current directory to Python path
+# Add current directory to Python path (optional for dev)
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 

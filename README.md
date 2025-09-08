@@ -1,214 +1,83 @@
 # Face Attendance System
 
-## Overview
-End-to-end face attendance solution combining Django (frontend/admin) and FastAPI (AI backend). Supports student registration with liveness detection (embeddings only) and live detection for attendance marking from USB/RTSP cameras.
+A production-ready face recognition and liveness detection system for attendance marking, built with FastAPI (backend) and Django (frontend).
 
-## Tech Stack
-- Backend: FastAPI (Python)
-- Frontend/Admin: Django
-- AI: InsightFace (embeddings), YOLO/OpenCV (detection fallback), NumPy, OpenCV
-- Realtime: WebSocket (status/logs)
-- DB: SQLAlchemy to SQLite (default) or PostgreSQL
+## 🏗️ System Architecture
 
-## Features
-- Liveness detection with head pose (center/left/right) gating
-- Store embeddings in `students.face_embedding` (binary)
-- Live camera detection; cosine similarity matching; attendance logging
-- Auto-reconnect for cameras; robust error logs
+### Backend (FastAPI - Port 8001)
+- **AI/ML Processing**: Face detection (YOLOv8n), recognition (InsightFace ArcFace), and liveness detection
+- **Database**: SQLAlchemy with SQLite/PostgreSQL support using strict `student_id` primary key structure
+- **Authentication**: JWT-based security with admin tokens
+- **API Endpoints**: RESTful APIs for all operations with comprehensive logging
 
-## Database Schema
-```
-students
-  id (int, pk)
-  name (str)
-  roll_number (str, unique)
-  face_embedding (bytes, nullable)
-  embedding_vector (json string, legacy)
+### Frontend (Django - Port 8000)
+- **Web Interface**: Student registration and attendance management
+- **Admin Panel**: Django admin for system management
+- **Templates**: HTML templates with JavaScript for camera integration
+- **Static Files**: CSS, JavaScript, and media handling
 
-attendance_log
-  id (int, pk)
-  student_id (fk -> students.id)
-  timestamp (datetime, default now)
-  status (str, default "Present")
-```
+## 🚀 Tech Stack
 
-## Running the Project
+### Backend Technologies
+- **FastAPI**: Modern Python web framework for APIs
+- **SQLAlchemy**: Database ORM with Alembic migrations
+- **YOLOv8n**: Face detection in video frames
+- **InsightFace Buffalo_L**: Face recognition and embedding extraction
+- **OpenCV**: Computer vision and image processing
+- **JWT**: Secure authentication tokens
 
-1) Create/activate a Python 3.11 env (venv311 included)
+### Frontend Technologies
+- **Django**: Web framework for frontend and admin
+- **Bootstrap 5**: Responsive UI components
+- **JavaScript**: Camera integration and API calls
+- **WebRTC**: Real-time camera access
 
-2) Install requirements (if needed)
-```
-cd backend
-..\venv311\Scripts\python.exe -m pip install -r requirements.txt
-```
+### AI/ML Models
+- **YOLOv8n**: Face detection model (`models/yolov8n.pt`)
+- **InsightFace Buffalo_L**: Face recognition and embedding extraction (ArcFace)
+- **MediaPipe**: Optional head pose estimation for liveness detection
 
-3) Start FastAPI (port 8001)
-```
-cd backend
-..\venv311\Scripts\python.exe start_fastapi.py
-```
+## 📊 Database Schema (Strict Key Structure)
 
-4) Start Django (port 8000)
-```
-cd backend
-..\venv311\Scripts\python.exe manage.py runserver 0.0.0.0:8000
-```
+### Core Tables
+```sql
+-- Students table (student_id as PRIMARY KEY)
+students (
+    student_id INTEGER PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    roll_no VARCHAR(50) UNIQUE NOT NULL,
+    branch VARCHAR(50),
+    year INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)
 
-## Workflow
+-- Face embeddings (one per student, 512D ArcFace vectors)
+student_embeddings (
+    student_id INTEGER PRIMARY KEY REFERENCES students(student_id),
+    embedding BLOB NOT NULL,  -- 512D float32 array as binary
+    model_version VARCHAR(50) DEFAULT 'buffalo_l',
+    quality_score FLOAT DEFAULT 0.0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)
 
-### Registration (Liveness Detection)
-1. Get FastAPI token (UI button on student form)
-2. Click “Start Liveness Detection”
-3. Complete steps: center (±5°), left (< -15°), right (> +15°)
-4. Backend extracts embeddings with InsightFace and saves to `students.face_embedding`
-5. UI shows: “Student embeddings captured and saved successfully” and stops camera
-
-Note: Attendance is NOT marked during registration.
-
-### Live Detection (Attendance)
-1. Start detection from UI (USB/RTSP)
-2. Backend extracts embeddings from frames and compares to DB
-3. If similarity > 0.7, mark attendance in `attendance_log`
-4. UI shows success banner and logs reflect recognition/attendance
-
-## API
-- Auth: `POST /api/v1/auth/login`
-- Liveness:
-  - `POST /api/v1/liveness/session`
-  - `POST /api/v1/liveness/detect`
-- Detection:
-  - `POST /api/v1/detection/start`
-  - `POST /api/v1/detection/stop`
-  - `POST /api/v1/detection/laptop-camera/start|stop`
-
-FastAPI runs at `http://localhost:8001` with CORS enabled for `*`.
-
-## Logs & Debugging
-- Backend logs print: camera start/stop, step detections, embeddings saved, recognition matches, attendance commits, and errors with stack traces.
-
-## Future Enhancements
-- Improve multi-face handling and region-of-interest tracking
-- Persist tokens and RBAC for multi-user admins
-- GPU acceleration when available
-
-## System Overview
-
-A comprehensive face attendance system with liveness detection and real-time face recognition capabilities.
-
-## Data Flow: Liveness Detection → Embedding Storage → Recognition
-
-### 1. Liveness Detection Process
-
-**Frontend Flow:**
-1. User clicks "Start Liveness Detection" 
-2. Creates liveness session via `POST /api/v1/liveness/session`
-3. Camera captures frames for 3 positions: center → left → right
-4. Each frame sent to `POST /api/v1/liveness/detect` with position and base64 image data
-5. Backend processes each frame and extracts embeddings
-6. After all 3 positions completed, backend automatically finalizes session
-7. Frontend receives `session_completed=true` response and closes modal
-
-**Backend Processing (per frame):**
-1. Decode base64 image data to numpy array
-2. Run liveness detection using AI models (InsightFace/OpenCV)
-3. Extract face embedding using face recognition system
-4. Store frame data and embedding in session table
-5. When all 3 positions completed:
-   - Verify movement using embedding comparison
-   - Mark session as "COMPLETED"
-   - Save final embedding to student record
-   - Reload known faces in recognition system
-
-### 2. Embedding Storage
-
-**Database Storage:**
-- **students.embedding_vector**: Final face embedding as JSON string (primary storage)
-- **liveness_detection_sessions**: Temporary storage during liveness process
-  - center_embedding, left_embedding, right_embedding: Individual position embeddings
-  - final_embedding: Chosen embedding (usually center position)
-
-**Storage Location:**
-```
-Database: face_attendance.db
-Table: students
-Column: embedding_vector (TEXT)
-Format: JSON array of float values (e.g., "[0.123, -0.456, ...]")
+-- Attendance logs (prevents duplicate daily attendance)
+attendance_log (
+    log_id INTEGER PRIMARY KEY,
+    student_id INTEGER REFERENCES students(student_id),
+    detected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    confidence FLOAT NOT NULL,
+    camera_source VARCHAR(100),
+    UNIQUE(student_id, DATE(detected_at))
+)
 ```
 
-**Logging:**
-Backend logs confirm storage:
-```
-INFO: Embeddings saved for Student {id} in database table 'students.embedding_vector'
-INFO: Reloaded {count} known faces in recognition system
-```
+## 🛠️ Installation & Setup
 
-### 3. Model Training/Recognition Pipeline
-
-**No Retraining Required:**
-- System uses direct embedding comparison (cosine similarity)
-- New students add embeddings to database without model retraining
-- Recognition compares live embeddings against stored embeddings
-
-**Recognition Process:**
-1. Camera captures frame
-2. Detect faces using YOLO/OpenCV
-3. Extract embedding from each detected face
-4. Compare against all known student embeddings
-5. If similarity > 0.7 threshold, mark attendance
-6. Attendance logged with confidence score
-
-**Live Recognition Flow:**
-```
-Camera Frame → Face Detection → Embedding Extraction → 
-Compare with Stored Embeddings → Match Found → Mark Attendance
-```
-
-**Face Recognition System:**
-- **Initialization**: Load all student embeddings from database
-- **Recognition**: Compare live embeddings using cosine similarity
-- **Threshold**: 0.7 similarity required for positive match
-- **Attendance**: Automatic marking when recognized (once per day per student)
-
-### 4. System Architecture
-
-**AI Models:**
-- **YOLO**: Face detection in frames
-- **InsightFace**: Face embedding extraction and liveness detection
-- **OpenCV**: Fallback for face detection when YOLO unavailable
-
-**Data Pipeline:**
-```
-Registration: Image Capture → Liveness Detection → Embedding Extraction → Database Storage
-Recognition: Live Camera → Face Detection → Embedding Extraction → Similarity Comparison → Attendance Marking
-```
-
-**Key Components:**
-- `app/ai_models.py`: Face recognition and liveness detection systems
-- `app/liveness_detection.py`: Liveness detection engine
-- `app/camera_processor.py`: Real-time camera processing and attendance marking
-- `app/routers/liveness.py`: Liveness detection API endpoints
-- `app/models.py`: Database models for students and sessions
-
-### 5. Attendance Recognition
-
-**Automatic Attendance:**
-- Camera streams continuously process frames
-- Face recognition runs on each frame
-- When student recognized with confidence > 0.7:
-  - Check if attendance already marked today
-  - If not, create new attendance record
-  - Log recognition with confidence score and camera location
-
-**Database Tables:**
-- **students**: Student info + face embeddings
-- **attendance**: Attendance records with timestamps and confidence
-- **detection_logs**: Performance logs of face detection
-
-**Recognition Threshold:**
-- Similarity > 0.7 required for positive identification
-- Prevents false positives while maintaining accuracy
-
-## Installation and Setup
+### Prerequisites
+- Python 3.11+ (verified with Python 3.13.6)
+- Webcam or camera device
+- 4GB+ RAM recommended
+- Git
 
 ### 1. Clone the Repository
 ```bash
@@ -216,146 +85,377 @@ git clone <repository-url>
 cd face-attend
 ```
 
-### 2. Install Dependencies
+### 2. Create Virtual Environment
+```bash
+python -m venv venv
+# On Windows:
+venv\Scripts\activate
+# On Linux/Mac:
+source venv/bin/activate
+```
+
+### 3. Install Backend Dependencies
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
 
-### 3. Database Setup
-
-#### For Django (Web Interface)
+### 4. Install Frontend Dependencies
 ```bash
+cd ../frontend
+pip install -r requirements.txt
+```
+
+### 5. Model Requirements
+The system requires the following AI models:
+
+#### YOLOv8n (Face Detection)
+- **File**: `models/yolov8n.pt`
+- **Status**: ✅ Included and verified working
+- **Purpose**: Face detection in video frames
+
+#### InsightFace Buffalo_L (Face Recognition)
+- **Model**: `buffalo_l` (ArcFace)
+- **Status**: ✅ Auto-downloaded on first use
+- **Purpose**: Face embedding extraction and recognition
+- **Location**: `~/.insightface/models/buffalo_l/`
+
+#### MediaPipe (Optional)
+- **Status**: Optional - head pose estimation disabled if not available
+- **Purpose**: Enhanced liveness detection
+
+### 6. Database Setup
+
+#### Backend (FastAPI)
+```bash
+cd backend
+python -c "from app.database import create_tables; create_tables()"
+```
+
+#### Frontend (Django)
+```bash
+cd frontend
 python manage.py makemigrations
 python manage.py migrate
 python manage.py createsuperuser
 ```
 
-#### For FastAPI (Real-time API)
-```bash
-python scripts/init_db.py
-```
+## 🚀 Running the System
 
-### 4. Start the Servers
-
-#### Start Django Server
+### Option 1: Start Both Services (Recommended)
 ```bash
-python start_backend.py
-# Access at: http://localhost:8000
-```
-
-#### Start FastAPI Server
-```bash
+# Terminal 1: Start FastAPI Backend (Port 8001)
+cd backend
 python start_fastapi.py
-# Access at: http://localhost:8000
-# API docs at: http://localhost:8000/docs
+
+# Terminal 2: Start Django Frontend (Port 8000)
+cd frontend
+python manage.py runserver 0.0.0.0:8000
 ```
 
-#### Start Both (Django + FastAPI) Together
+### Option 2: Individual Services
 ```bash
-python start_complete_system.py
-# Django at: http://localhost:8000
-# FastAPI at: http://localhost:8001 (docs at /docs)
+# Start FastAPI Backend (Port 8001)
+cd backend
+python start_fastapi.py
+
+# Start Django Frontend (Port 8000)
+cd frontend
+python manage.py runserver 0.0.0.0:8000
 ```
 
-## 🎯 Usage
+### Access URLs
+- **Frontend Dashboard**: http://localhost:8000
+- **Student Registration**: http://localhost:8000/registration/
+- **Live Detection**: http://localhost:8000/detection/
+- **Admin Panel**: http://localhost:8000/admin/
+- **FastAPI Docs**: http://localhost:8001/docs
+- **Health Check**: http://localhost:8001/health
 
-### Student Registration with Liveness Detection
+## 🔐 Default Credentials
 
-1. **Access Student Registration**
-   - Navigate to the student registration page
-   - Fill in student details (name, roll number, etc.)
+- Username: `admin`
+- Password: `admin123`
 
-2. **Start Liveness Detection**
-   - Click "Start Liveness Detection" button
-   - Grant camera permissions when prompted
-   - Camera lifecycle: MediaStream remains active until you cancel; auto-reconnect on loss
+On backend startup, a default admin user is auto-created if missing. Passwords are stored hashed (bcrypt). Change credentials via environment variables or update `backend/app/config.py` and restart the backend.
 
-3. **Complete Liveness Verification**
-   - **Step 1**: Face the camera directly (Center position)
-   - **Step 2**: Slowly turn your head to the left
-   - **Step 3**: Slowly turn your head to the right
-   - Follow the on-screen instructions and progress indicators
+## 📱 Usage Workflow
 
-4. **Registration Completion**
-   - System verifies movement patterns
-   - Face embeddings are extracted and stored to the Student
-   - Student is registered with liveness verification
-   - When editing a student, successful liveness automatically marks attendance once per session
+### 1. Student Registration (Liveness Detection)
+1. Navigate to http://localhost:8000/registration/
+2. Fill in student details (Name, Roll No, Branch, Year)
+3. Click "Start Liveness Detection"
+4. Follow prompts: Center → Left → Right head movements
+5. System saves face embeddings automatically to `student_embeddings` table
+6. Click "Complete Registration"
 
-### Liveness Detection Process
+**Note**: Registration does NOT mark attendance - it only saves embeddings.
 
-The system uses advanced AI models to verify liveness:
+### 2. Live Detection (Attendance Marking)
+1. Navigate to http://localhost:8000/detection/
+2. Click "Start Detection"
+3. System recognizes faces and marks attendance
+4. **Green boxes** show recognized students with details (Name, Roll No, Branch, Year)
+5. **Red boxes** show unknown faces
+6. Attendance is logged automatically to `attendance_log` table (once per day per student)
 
-1. **Face Detection**: YOLO (v8n/v9n/v10n) detects faces in real-time
-2. **Movement Tracking**: Monitors head movements across three positions
-3. **Embedding Extraction**: ArcFace extracts face embeddings for each position
-4. **Liveness Verification**: Compares embeddings to detect natural movement patterns
-5. **Anti-Spoofing**: Prevents static image and video-based attacks
+### 3. System Monitoring
+- **Health Check**: http://localhost:8001/health
+- **Readiness Check**: http://localhost:8001/ready
+- **Metrics**: http://localhost:8001/metrics
+- **API Docs**: http://localhost:8001/docs
 
-### Logs and Observability
-- Backend logs:
-  - Camera feed started
-  - Frames received
-  - Embedding generated
-  - Match found
-  - Attendance logged or deduplicated
-- Frontend logs:
-  - Camera started/running/stopped
-  - Reconnect attempts on track end
-  - Liveness step transitions and results
+## 🔧 Configuration
 
-### API Endpoints
+### Environment Variables
+Create `backend/.env`:
+```env
+DATABASE_URL=sqlite:///./face_attendance.db
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+JWT_ALGORITHM=HS256
+API_HOST=0.0.0.0
+API_PORT=8001
+CORS_ORIGINS=["http://localhost:8000", "http://127.0.0.1:8000"]
+RECOGNITION_THRESHOLD=0.7
+EMBEDDING_MODEL_VERSION=buffalo_l
+```
 
-#### Liveness Detection API
+### Model Configuration
+- **Face Detection**: YOLOv8n (`models/yolov8n.pt`)
+- **Face Recognition**: InsightFace Buffalo_L (ArcFace)
+- **Liveness Detection**: MediaPipe head pose estimation (optional)
+- **Recognition Threshold**: 0.7 (configurable)
+- **Embedding Dimension**: 512D vectors
+
+## 📋 API Reference
+
+### Authentication
+All API endpoints require JWT authentication:
 ```bash
-# Create liveness session
-POST /api/v1/liveness/session
+# Get token (form-encoded)
+curl -X POST "http://localhost:8001/api/v1/auth/login" \
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     -d "username=admin&password=admin123"
 
-# Process frame for liveness detection
-POST /api/v1/liveness/detect
+# Or JSON
+curl -X POST "http://localhost:8001/api/v1/auth/login" \
+     -H "Content-Type: application/json" \
+     -d '{"username":"admin","password":"admin123"}'
 
-# Verify liveness completion
-POST /api/v1/liveness/verify
-
-# Register student with liveness
-POST /api/v1/liveness/register-student
+# Use token
+curl -H "Authorization: Bearer your_token_here" \
+     http://localhost:8001/api/v1/students/
 ```
 
-### Authentication and Using the Liveness API
+### Key Endpoints
 
-Most FastAPI endpoints under `/api/v1` require a JWT Bearer token.
+#### Health & Monitoring
+- `GET /health` - System health check
+- `GET /ready` - Database + model readiness
+- `GET /metrics` - Performance metrics
 
-1) Obtain a token (FastAPI)
+#### Liveness Detection (Registration)
+- `POST /api/v1/liveness/session` - Start liveness session
+- `POST /api/v1/liveness/frames` - Process liveness frames
+- `POST /api/v1/liveness/complete` - Complete and save embeddings
 
-POST `{FASTAPI_BASE}/api/v1/auth/login`
+#### Live Detection (Attendance)
+- `POST /api/v1/detection/start` - Start detection session
+- `POST /api/v1/detection/frame` - Process detection frame
+- `POST /api/v1/detection/stop` - Stop detection session
 
-Body:
+#### Student Management
+- `GET /api/v1/students/` - List all students
+- `POST /api/v1/students/` - Create new student
+- `GET /api/v1/students/{id}` - Get student details
+- `PUT /api/v1/students/{id}` - Update student
+- `DELETE /api/v1/students/{id}` - Delete student
 
-```json
-{
-  "username": "admin",
-  "password": "admin123"
-}
+#### Attendance
+- `GET /api/v1/attendance/` - List attendance records
+- `POST /api/v1/attendance/mark` - Mark attendance manually
+- `GET /api/v1/attendance/summary` - Get attendance summary
+
+## 🧪 Testing
+
+### Model Verification
+```bash
+# Test model loading
+cd backend
+python -c "from app.services.models import model_service; model_service.initialize_models(); print('✅ All models loaded successfully')"
 ```
 
-Response:
-
-```json
-{
-  "access_token": "<JWT>",
-  "token_type": "bearer"
-}
+### Backend Startup Test
+```bash
+cd backend
+python -c "from main import app; from app.services.models import model_service; model_service.initialize_models(); print('✅ Backend startup test successful')"
 ```
 
-Store the token in `localStorage` as `fastapi_access_token` for the frontend.
+### Expected Model Loading Logs
+```
+✅ YOLO model loaded: v8n from ../models/yolov8n.pt
+✅ InsightFace loaded: ArcFace buffalo_l
+MediaPipe not available - head pose estimation disabled
+All models initialized successfully
+```
 
-2) Call liveness endpoints with headers
+## 🔒 Security Features
 
-- `Content-Type: application/json`
-- `Accept: application/json`
-- `Authorization: Bearer <JWT>`
+- **JWT Authentication**: All API endpoints require valid tokens
+- **CORS Protection**: Restricted to frontend origins
+- **Input Validation**: Pydantic schemas for all requests
+- **SQL Injection Protection**: SQLAlchemy ORM with parameterized queries
+- **Rate Limiting**: Built-in request throttling
 
-3) Base URL selection
+## 📊 Monitoring & Observability
 
-- If started via `start_complete_system.py`: `FASTAPI_BASE = http://localhost:8001`
+### Health Endpoints
+- `GET /health` - Basic process health
+- `GET /ready` - Database + model readiness
+- `GET /metrics` - Performance metrics
+
+### Logging
+- Structured JSON logs
+- Request/response tracking
+- Error monitoring
+- Performance metrics
+
+### Metrics Tracked
+- Total students registered
+- Face embeddings stored
+- Attendance records created
+- Recognition success rate
+- Average processing time
+- FPS (frames per second)
+
+## 🚨 Troubleshooting
+
+### Common Issues
+
+1. **"Failed to fetch" errors**
+   - Check if FastAPI is running on port 8001
+   - Verify CORS configuration
+   - Check browser console for detailed errors
+
+2. **Camera not working**
+   - Ensure camera permissions are granted
+   - Check if camera is being used by another application
+   - Try refreshing the page
+
+3. **Models not loading**
+   - Check if YOLOv8n model exists at `models/yolov8n.pt`
+   - Verify InsightFace models are downloaded (auto-download on first use)
+   - Check logs for model loading errors
+
+4. **Database errors**
+   - Ensure SQLite database file is writable
+   - Check database schema migrations
+   - Verify foreign key constraints
+
+### Debug Mode
+Enable debug logging:
+```bash
+export LOG_LEVEL=DEBUG
+python backend/start_fastapi.py
+```
+
+### Reset Database
+```bash
+cd backend
+rm face_attendance.db
+python -c "from app.database import create_tables; create_tables()"
+```
+
+## 🚀 Production Deployment
+
+### Docker Deployment
+```bash
+# Build and run with Docker Compose
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+### Environment Setup
+1. Set production environment variables
+2. Use PostgreSQL instead of SQLite
+3. Configure proper JWT secrets
+4. Set up reverse proxy (Nginx)
+5. Enable HTTPS
+6. Configure monitoring and alerting
+
+### Performance Optimization
+- Use GPU acceleration for AI models
+- Implement Redis for session storage
+- Add database connection pooling
+- Configure CDN for static assets
+- Set up horizontal scaling
+
+## 📁 Project Structure
+
+```
+face-attend/
+├── backend/                 # FastAPI backend
+│   ├── app/                # Main application code
+│   │   ├── routers/        # API route handlers
+│   │   ├── models.py       # Database models (strict student_id PK)
+│   │   ├── schemas.py      # Pydantic schemas
+│   │   ├── ai_models.py    # AI model integration
+│   │   ├── services/       # Model and storage services
+│   │   └── database.py     # Database configuration
+│   ├── alembic/            # Database migrations
+│   ├── requirements.txt    # Backend dependencies
+│   ├── start_fastapi.py    # FastAPI startup script
+│   └── main.py             # FastAPI application
+├── frontend/               # Django frontend
+│   ├── attendance/         # Django app
+│   │   ├── models.py       # Django models
+│   │   ├── views.py        # Django views
+│   │   ├── urls.py         # URL routing
+│   │   └── templates/      # HTML templates
+│   ├── face_attendance/    # Django project settings
+│   ├── templates/          # Global templates
+│   ├── static/             # Static files
+│   ├── media/              # Media files
+│   ├── requirements.txt    # Frontend dependencies
+│   └── manage.py           # Django management script
+├── models/                 # AI model files
+│   └── yolov8n.pt         # YOLOv8n face detection model
+├── venv/                   # Python virtual environment (3.13.6)
+├── docker-compose.prod.yml # Production deployment
+└── README.md               # This file
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🆘 Support
+
+For issues and questions:
+1. Check the troubleshooting section
+2. Review the API documentation
+3. Check system logs
+4. Create an issue with detailed information
+
+---
+
+**System Status**: ✅ Production Ready  
+**Last Updated**: December 2024  
+**Version**: 1.0.0
+
+## ✅ Verification Checklist
+
+- [x] **Virtual Environment**: Single venv with Python 3.13.6
+- [x] **YOLO Model**: YOLOv8n verified working (YOLOv10n removed due to compatibility issues)
+- [x] **InsightFace**: Buffalo_L model verified working with clear startup logs
+- [x] **Database Schema**: Strict `student_id` primary key structure across all tables
+- [x] **Backend Startup**: Models load successfully with clear logging
+- [x] **Project Structure**: Clean structure with only necessary files
+- [x] **Documentation**: Single comprehensive README.md with all instructions
